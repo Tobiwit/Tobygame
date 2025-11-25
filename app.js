@@ -1,5 +1,5 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, increment, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 const HARDCODED_PASSWORD = "pineapple";
 
@@ -154,11 +154,11 @@ async function vote(voteType) {
         
         if (voteType === 'like') {
             await updateDoc(questionRef, {
-                likes: question.likes + 1
+                likes: increment(1)
             });
         } else {
             await updateDoc(questionRef, {
-                dislikes: question.dislikes + 1
+                dislikes: increment(1)
             });
         }
         
