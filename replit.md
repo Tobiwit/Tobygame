@@ -11,6 +11,9 @@ A mobile-optimized web application for playing a multiplayer question-based game
 - Fixed vote race condition by using Firebase atomic increment() operator for concurrent voting
 - Mobile-first responsive design with gradient background and card-based UI
 - Single-page app architecture with smooth screen transitions
+- **NEW**: Added like/dislike voting during gameplay - players can vote on questions while playing
+- **NEW**: Implemented weighted random selection - questions with better like/dislike ratios appear more frequently
+- Vote buttons automatically hide after voting to prevent double votes
 
 ## User Preferences
 
