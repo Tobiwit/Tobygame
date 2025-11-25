@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Question Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div id="passwordScreen" class="screen active">
+            <div class="card">
+                <h1>🔐 Enter Password</h1>
+                <input type="password" id="passwordInput" placeholder="Enter password" autocomplete="off">
+                <button onclick="checkPassword()">Submit</button>
+                <p id="passwordError" class="error"></p>
+            </div>
+        </div>
+
+        <div id="mainMenu" class="screen">
+            <div class="card">
+                <h1>🎮 Question Game</h1>
+                <div class="menu-buttons">
+                    <button onclick="showScreen('addQuestionScreen')">➕ Add Question</button>
+                    <button onclick="showScreen('voteQuestionsScreen')">👍 Vote Questions</button>
+                    <button onclick="showScreen('seeQuestionsScreen')">📋 See Questions</button>
+                    <button onclick="showScreen('startGameScreen')">🎯 Start Game</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="addQuestionScreen" class="screen">
+            <div class="card">
+                <h2>➕ Add Question</h2>
+                <textarea id="questionText" placeholder="Enter your question..." rows="4"></textarea>
+                <select id="questionCategory">
+                    <option value="Funny">Funny</option>
+                    <option value="Truth">Truth</option>
+                    <option value="Dare">Dare</option>
+                    <option value="Personal">Personal</option>
+                </select>
+                <button onclick="addQuestion()">Save Question</button>
+                <button class="secondary" onclick="showScreen('mainMenu')">Back</button>
+                <p id="addQuestionMessage" class="message"></p>
+            </div>
+        </div>
+
+        <div id="voteQuestionsScreen" class="screen">
+            <div class="card">
+                <h2>👍 Vote Questions</h2>
+                <div id="voteContent">
+                    <div id="voteQuestion" class="question-card"></div>
+                    <div class="vote-buttons">
+                        <button onclick="vote('like')" class="like-btn">👍 Like</button>
+                        <button onclick="vote('dislike')" class="dislike-btn">👎 Dislike</button>
+                    </div>
+                </div>
+                <button class="secondary" onclick="showScreen('mainMenu')">Back to Menu</button>
+                <p id="voteMessage" class="message"></p>
+            </div>
+        </div>
+
+        <div id="seeQuestionsScreen" class="screen">
+            <div class="card">
+                <h2>📋 All Questions</h2>
+                <div id="questionsList"></div>
+                <button class="secondary" onclick="showScreen('mainMenu')">Back</button>
+            </div>
+        </div>
+
+        <div id="startGameScreen" class="screen">
+            <div class="card">
+                <h2>🎯 Start Game</h2>
+                <p>Enter player names (comma-separated):</p>
+                <textarea id="playerNames" placeholder="Alice, Bob, Charlie..." rows="3"></textarea>
+                <button onclick="startGame()">Start Game</button>
+                <button class="secondary" onclick="showScreen('mainMenu')">Back</button>
+                <p id="gameSetupMessage" class="message"></p>
+            </div>
+        </div>
+
+        <div id="gameScreen" class="screen">
+            <div class="card">
+                <div class="game-header">
+                    <h3>Current Player:</h3>
+                    <h2 id="currentPlayer"></h2>
+                </div>
+                <div class="question-card large" id="gameQuestion"></div>
+                <div class="game-buttons">
+                    <button onclick="nextQuestion()" class="next-btn">Next ➡️</button>
+                    <button onclick="skipQuestion()" class="skip-btn">Skip ⏭️</button>
+                </div>
+                <button class="secondary" onclick="endGame()">End Game</button>
+            </div>
+        </div>
+
+        <div id="firebaseConfig" class="screen">
+            <div class="card">
+                <h2>⚙️ Firebase Configuration</h2>
+                <p>Please configure your Firebase settings in app.js</p>
+                <button onclick="showScreen('mainMenu')">Back</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
