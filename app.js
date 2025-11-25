@@ -4,12 +4,13 @@ import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, increment, q
 const HARDCODED_PASSWORD = "pineapple";
 
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_AUTH_DOMAIN",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_STORAGE_BUCKET",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyAP9HccB7Ri2KXobu5S1p_FJ7L6QeA2GHQ" ,
+  authDomain: "tobygame-df9f1.firebaseapp.com",
+  projectId: "tobygame-df9f1",
+  storageBucket: "tobygame-df9f1.firebasestorage.app",
+  messagingSenderId: "1070543180902",
+  appId: "1:1070543180902:web:611bdb0b28e998fd7189a7",
+  measurementId: "G-SGZFK0GKYT"
 };
 
 let app;
@@ -58,6 +59,7 @@ function showScreen(screenId) {
 
 async function addQuestion() {
     const text = document.getElementById('questionText').value.trim();
+    const scale = document.getElementById('scaleText').value.trim();
     const category = document.getElementById('questionCategory').value;
     const message = document.getElementById('addQuestionMessage');
     
@@ -66,11 +68,18 @@ async function addQuestion() {
         message.className = 'message error';
         return;
     }
+
+    if (!scale) {
+        message.textContent = 'Please enter a scale or leave default (1 - 10).';
+        message.className = 'message error';
+        return;
+    }
     
     try {
         await addDoc(collection(db, 'questions'), {
             text: text,
             category: category,
+            scale: scale,
             likes: 0,
             dislikes: 0,
             createdAt: new Date()
@@ -117,7 +126,7 @@ async function loadVoteQuestions() {
         }
     } catch (error) {
         console.error("Error loading questions:", error);
-        message.textContent = '❌ Error loading questions. Check Firebase config.';
+        message.textContent = 'Error loading questions. Failed to connected to Database';
         message.className = 'message error';
     }
 }
@@ -126,14 +135,14 @@ function displayCurrentVoteQuestion() {
     const voteQuestionDiv = document.getElementById('voteQuestion');
     
     if (currentVoteIndex >= currentVoteQuestions.length) {
-        document.getElementById('voteContent').innerHTML = '<p style="text-align: center; padding: 40px; color: #888;">All done! No more questions to vote on.</p>';
+        document.getElementById('voteContent').innerHTML = '<p style="text-align: center; padding: 40px; color: #888;">No more questions to vote on.</p>';
         return;
     }
     
     const question = currentVoteQuestions[currentVoteIndex];
     voteQuestionDiv.innerHTML = `
         <span class="category">${question.category}</span>
-        <div class="text">${question.text}</div>
+        <div class="text">${question.text} ${question.scale}</div>
         <div class="votes">
             <span>👍 ${question.likes}</span>
             <span>👎 ${question.dislikes}</span>
@@ -202,7 +211,7 @@ async function loadAllQuestions() {
         
         let html = '<div class="questions-list-container">';
         
-        const categories = ['Funny', 'Truth', 'Dare', 'Personal'];
+        const categories = ["🔥 Spicy","😈 Kinky","🧨 Explosive group questions","🔥 Confidence","💕 Love & Dating","🥂 Party","💭 Deep / Emotional","✨ Random"];
         categories.forEach(category => {
             if (questionsByCategory[category] && questionsByCategory[category].length > 0) {
                 html += `<div class="category-group">
@@ -210,7 +219,7 @@ async function loadAllQuestions() {
                 
                 questionsByCategory[category].forEach(q => {
                     html += `<div class="question-card">
-                        <div class="text">${q.text}</div>
+                        <div class="text">${q.text} ${q.scale}</div>
                         <div class="votes">
                             <span>👍 ${q.likes}</span>
                             <span>👎 ${q.dislikes}</span>
@@ -253,7 +262,7 @@ async function startGame() {
         gameQuestions = [];
         
         querySnapshot.forEach((doc) => {
-            gameQuestions.push(doc.data());
+            gameQuestions.push({ id: doc.id, ...doc.data() });
         });
         
         if (gameQuestions.length === 0) {
@@ -263,21 +272,25 @@ async function startGame() {
         }
         
         gamePlayers = shuffleArray(gamePlayers);
-        gameQuestions = shuffleArray(gameQuestions);
+        gameQuestions = weightedShuffleQuestions(gameQuestions);
         currentPlayerIndex = 0;
         
         showScreen('gameScreen');
         displayGameQuestion();
     } catch (error) {
         console.error("Error loading game questions:", error);
-        message.textContent = '❌ Error loading questions. Check Firebase config.';
+        message.textContent = 'Error loading questions. Couldnt connect to Database';
         message.className = 'message error';
     }
 }
 
 function displayGameQuestion() {
+    const gameVoteMessage = document.getElementById('gameVoteMessage');
+    gameVoteMessage.textContent = '';
+    
     if (gameQuestions.length === 0) {
         document.getElementById('gameQuestion').innerHTML = '<p style="color: #888;">No more questions! Game over.</p>';
+        document.getElementById('gameVoteButtons').style.display = 'none';
         return;
     }
     
@@ -286,9 +299,19 @@ function displayGameQuestion() {
     
     document.getElementById('currentPlayer').textContent = player;
     document.getElementById('gameQuestion').innerHTML = `
+    <div style="flex:1 gap: 10px;">
         <span class="category">${question.category}</span>
-        <div style="margin-top: 15px;">${question.text}</div>
+        <div style="margin-top: 15px;">${question.text} ${question.scale}</div>
+        </div>
     `;
+    
+    const hasVoted = localStorage.getItem(`voted_${question.id}`);
+    const voteButtons = document.getElementById('gameVoteButtons');
+    if (hasVoted) {
+        voteButtons.style.display = 'none';
+    } else {
+        voteButtons.style.display = 'grid';
+    }
 }
 
 function nextQuestion() {
@@ -322,10 +345,101 @@ function shuffleArray(array) {
     return newArray;
 }
 
+function weightedShuffleQuestions(questions) {
+    const questionsWithWeights = questions.map(q => {
+        const likes = q.likes || 0;
+        const dislikes = q.dislikes || 0;
+        const totalVotes = likes + dislikes;
+        
+        let weight;
+        if (totalVotes === 0) {
+            weight = 1;
+        } else {
+            const ratio = likes / totalVotes;
+            weight = Math.pow(ratio + 0.1, 2);
+        }
+        
+        return { question: q, weight: weight };
+    });
+    
+    const weightedList = [];
+    questionsWithWeights.forEach(item => {
+        const count = Math.max(1, Math.round(item.weight * 10));
+        for (let i = 0; i < count; i++) {
+            weightedList.push(item.question);
+        }
+    });
+    
+    const shuffled = shuffleArray(weightedList);
+    
+    const uniqueQuestions = [];
+    const seenIds = new Set();
+    
+    for (const q of shuffled) {
+        if (!seenIds.has(q.id)) {
+            uniqueQuestions.push(q);
+            seenIds.add(q.id);
+        }
+    }
+    
+    return uniqueQuestions;
+}
+
+async function gameVote(voteType) {
+    if (gameQuestions.length === 0) {
+        return;
+    }
+    
+    const question = gameQuestions[0];
+    const message = document.getElementById('gameVoteMessage');
+    
+    const hasVoted = localStorage.getItem(`voted_${question.id}`);
+    if (hasVoted) {
+        message.textContent = 'You already voted on this question!';
+        message.className = 'message error';
+        setTimeout(() => {
+            message.textContent = '';
+        }, 2000);
+        return;
+    }
+    
+    try {
+        const questionRef = doc(db, 'questions', question.id);
+        
+        if (voteType === 'like') {
+            await updateDoc(questionRef, {
+                likes: increment(1)
+            });
+            question.likes = (question.likes || 0) + 1;
+        } else {
+            await updateDoc(questionRef, {
+                dislikes: increment(1)
+            });
+            question.dislikes = (question.dislikes || 0) + 1;
+        }
+        
+        localStorage.setItem(`voted_${question.id}`, 'true');
+        
+        message.textContent = '✅ Vote recorded!';
+        message.className = 'message success';
+        
+        document.getElementById('gameVoteButtons').style.display = 'none';
+        
+        setTimeout(() => {
+            message.textContent = '';
+        }, 2000);
+    } catch (error) {
+        console.error("Error voting:", error);
+        message.textContent = '❌ Error submitting vote.';
+        message.className = 'message error';
+    }
+}
+
 window.checkPassword = checkPassword;
 window.showScreen = showScreen;
 window.addQuestion = addQuestion;
 window.vote = vote;
+window.gameVote = gameVote;
 window.startGame = startGame;
 window.nextQuestion = nextQuestion;
 window.skipQuestion = skipQuestion;

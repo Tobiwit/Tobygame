@@ -33,11 +33,16 @@
             <div class="card">
                 <h2>➕ Add Question</h2>
                 <textarea id="questionText" placeholder="Enter your question..." rows="4"></textarea>
+                <textarea id="scaleText" rows="1">(1 - 10)</textarea>"
                 <select id="questionCategory">
-                    <option value="Funny">Funny</option>
-                    <option value="Truth">Truth</option>
-                    <option value="Dare">Dare</option>
-                    <option value="Personal">Personal</option>
+                    <option value="🔥 Spicy">🔥 Spicy</option>
+                    <option value="😈 Kinky">😈 Kinky</option>
+                    <option value="🧨 Explosive group questions">🧨 Explosive group questions</option>
+                    <option value="🔥 Confidence">🔥 Confidence</option>
+                    <option value="💕 Love & Dating">💕 Love & Dating</option>
+                    <option value="🥂 Party">🥂 Party</option>
+                    <option value="💭 Deep / Emotional">💭 Deep / Emotional</option>
+                    <option value="✨ Random">✨ Random</option>
                 </select>
                 <button onclick="addQuestion()">Save Question</button>
                 <button class="secondary" onclick="showScreen('mainMenu')">Back</button>
@@ -86,6 +91,11 @@
                     <h2 id="currentPlayer"></h2>
                 </div>
                 <div class="question-card large" id="gameQuestion"></div>
+                <div id="gameVoteButtons" class="vote-buttons">
+                    <button onclick="gameVote('like')" class="like-btn">👍 Like</button>
+                    <button onclick="gameVote('dislike')" class="dislike-btn">👎 Dislike</button>
+                </div>
+                <p id="gameVoteMessage" class="message"></p>
                 <div class="game-buttons">
                     <button onclick="nextQuestion()" class="next-btn">Next ➡️</button>
                     <button onclick="skipQuestion()" class="skip-btn">Skip ⏭️</button>
