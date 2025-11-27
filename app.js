@@ -1,7 +1,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
 import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, increment, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-const HARDCODED_PASSWORD = "pineapple";
+const HARDCODED_PASSWORD = "ohlala";
 
 const firebaseConfig = {
     apiKey: "AIzaSyAP9HccB7Ri2KXobu5S1p_FJ7L6QeA2GHQ" ,
@@ -28,6 +28,8 @@ let currentVoteIndex = 0;
 let gameQuestions = [];
 let gamePlayers = [];
 let currentPlayerIndex = 0;
+
+let hasVotedInGame = false;
 
 function checkPassword() {
     const input = document.getElementById('passwordInput');
@@ -150,6 +152,34 @@ function displayCurrentVoteQuestion() {
     `;
 }
 
+async function voteInGame(voteType) {
+    console.log('voteInGame called with:', voteType);
+    const question = gameQuestions[0];
+    const voteButtons = document.getElementById('gameVoteButtons');
+    console.log('Vote buttons element:', voteButtons);
+
+    
+
+    try {
+        const questionRef = doc(db, 'questions', question.id);
+
+        if (voteType === 'like') {
+            await updateDoc(questionRef, {
+                likes: increment(1)
+            });
+        } else {
+            await updateDoc(questionRef, {
+                dislikes: increment(1)
+            });
+        }
+        hasVotedInGame = true;
+        voteButtons.style.display = 'none';
+    } catch (error) {
+        console.error("Error voting:", error);
+    }
+    
+}
+
 async function vote(voteType) {
     if (currentVoteIndex >= currentVoteQuestions.length) {
         return;
@@ -157,6 +187,8 @@ async function vote(voteType) {
     
     const question = currentVoteQuestions[currentVoteIndex];
     const message = document.getElementById('voteMessage');
+
+    
     
     try {
         const questionRef = doc(db, 'questions', question.id);
@@ -211,7 +243,7 @@ async function loadAllQuestions() {
         
         let html = '<div class="questions-list-container">';
         
-        const categories = ["🔥 Spicy","😈 Kinky","🧨 Explosive group questions","🔥 Confidence","💕 Love & Dating","🥂 Party","💭 Deep / Emotional","✨ Random"];
+        const categories = ["🔥 Spicy","😈 Kinky","🧨 Explosive group questions","✨ Confidence","💕 Love & Dating","🥂 Party","💭 Deep / Emotional","✨ Random"];
         categories.forEach(category => {
             if (questionsByCategory[category] && questionsByCategory[category].length > 0) {
                 html += `<div class="category-group">
@@ -272,7 +304,7 @@ async function startGame() {
         }
         
         gamePlayers = shuffleArray(gamePlayers);
-        gameQuestions = weightedShuffleQuestions(gameQuestions);
+        //gameQuestions = weightedShuffleQuestions(gameQuestions);
         currentPlayerIndex = 0;
         
         showScreen('gameScreen');
@@ -285,8 +317,9 @@ async function startGame() {
 }
 
 function displayGameQuestion() {
+    /*
     const gameVoteMessage = document.getElementById('gameVoteMessage');
-    gameVoteMessage.textContent = '';
+    gameVoteMessage.textContent = '';*/
     
     if (gameQuestions.length === 0) {
         document.getElementById('gameQuestion').innerHTML = '<p style="color: #888;">No more questions! Game over.</p>';
@@ -305,9 +338,8 @@ function displayGameQuestion() {
         </div>
     `;
     
-    const hasVoted = localStorage.getItem(`voted_${question.id}`);
     const voteButtons = document.getElementById('gameVoteButtons');
-    if (hasVoted) {
+    if (hasVotedInGame) {
         voteButtons.style.display = 'none';
     } else {
         voteButtons.style.display = 'grid';
@@ -320,11 +352,13 @@ function nextQuestion() {
     }
     
     currentPlayerIndex = (currentPlayerIndex + 1) % gamePlayers.length;
+    hasVotedInGame = false;
     displayGameQuestion();
 }
 
 function skipQuestion() {
     currentPlayerIndex = (currentPlayerIndex + 1) % gamePlayers.length;
+    hasVotedInGame = false;
     displayGameQuestion();
 }
 
@@ -444,6 +478,7 @@ window.startGame = startGame;
 window.nextQuestion = nextQuestion;
 window.skipQuestion = skipQuestion;
 window.endGame = endGame;
+window.voteInGame = voteInGame;
 
 window.addEventListener('DOMContentLoaded', () => {
     const authorized = localStorage.getItem('authorized');

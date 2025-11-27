@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Question Game</title>
+    <title>Tobygame</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -19,9 +19,9 @@
 
         <div id="mainMenu" class="screen">
             <div class="card">
-                <h1>🎮 Question Game</h1>
+                <h1>Tobygame</h1>
                 <div class="menu-buttons">
-                    <button onclick="showScreen('addQuestionScreen')">➕ Add Question</button>
+                    <button onclick="showScreen('addQuestionScreen')">✒️ Add Question</button>
                     <button onclick="showScreen('voteQuestionsScreen')">👍 Vote Questions</button>
                     <button onclick="showScreen('seeQuestionsScreen')">📋 See Questions</button>
                     <button onclick="showScreen('startGameScreen')">🎯 Start Game</button>
@@ -38,7 +38,7 @@
                     <option value="🔥 Spicy">🔥 Spicy</option>
                     <option value="😈 Kinky">😈 Kinky</option>
                     <option value="🧨 Explosive group questions">🧨 Explosive group questions</option>
-                    <option value="🔥 Confidence">🔥 Confidence</option>
+                    <option value="✨ Confidence">✨ Confidence</option>
                     <option value="💕 Love & Dating">💕 Love & Dating</option>
                     <option value="🥂 Party">🥂 Party</option>
                     <option value="💭 Deep / Emotional">💭 Deep / Emotional</option>
@@ -75,7 +75,7 @@
 
         <div id="startGameScreen" class="screen">
             <div class="card">
-                <h2>🎯 Start Game</h2>
+                <h2>🎲 Start Game</h2>
                 <p>Enter player names (comma-separated):</p>
                 <textarea id="playerNames" placeholder="Alice, Bob, Charlie..." rows="3"></textarea>
                 <button onclick="startGame()">Start Game</button>
@@ -91,24 +91,14 @@
                     <h2 id="currentPlayer"></h2>
                 </div>
                 <div class="question-card large" id="gameQuestion"></div>
-                <div id="gameVoteButtons" class="vote-buttons">
-                    <button onclick="gameVote('like')" class="like-btn">👍 Like</button>
-                    <button onclick="gameVote('dislike')" class="dislike-btn">👎 Dislike</button>
-                </div>
-                <p id="gameVoteMessage" class="message"></p>
+                <div class="vote-buttons" id="gameVoteButtons">
+                        <button onclick="voteInGame('like')" class="like-btn">👍 Like</button>
+                        <button onclick="voteInGame('dislike')" class="dislike-btn">👎 Dislike</button>
+                    </div>
                 <div class="game-buttons">
                     <button onclick="nextQuestion()" class="next-btn">Next ➡️</button>
-                    <button onclick="skipQuestion()" class="skip-btn">Skip ⏭️</button>
                 </div>
                 <button class="secondary" onclick="endGame()">End Game</button>
-            </div>
-        </div>
-
-        <div id="firebaseConfig" class="screen">
-            <div class="card">
-                <h2>⚙️ Firebase Configuration</h2>
-                <p>Please configure your Firebase settings in app.js</p>
-                <button onclick="showScreen('mainMenu')">Back</button>
             </div>
         </div>
     </div>

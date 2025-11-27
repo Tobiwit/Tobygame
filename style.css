@@ -207,18 +207,11 @@ button.secondary:hover {
 }
 
 .game-buttons {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
     margin-bottom: 15px;
 }
 
 .next-btn {
     background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-}
-
-.skip-btn {
-    background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
 }
 
 .questions-list-container {
@@ -244,6 +237,7 @@ button.secondary:hover {
     }
     
     .card {
+        margin-top: 50px;
         padding: 20px;
     }
     
