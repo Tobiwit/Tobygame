@@ -304,7 +304,7 @@ async function startGame() {
         }
         
         gamePlayers = shuffleArray(gamePlayers);
-        //gameQuestions = weightedShuffleQuestions(gameQuestions);
+        gameQuestions = weightedShuffleQuestions(gameQuestions);
         currentPlayerIndex = 0;
         
         showScreen('gameScreen');
