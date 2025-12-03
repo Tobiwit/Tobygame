@@ -356,12 +356,15 @@ function nextQuestion() {
 
     const skipBtn = document.querySelector('.skip-btn');
     skipBtn.style.display = 'block';
-    
+
     displayGameQuestion();
 }
 
 function skipQuestion() {
-    currentPlayerIndex = (currentPlayerIndex + 1) % gamePlayers.length;
+    if (gameQuestions.length > 0) {
+        gameQuestions.shift();
+    }
+    
     hasVotedInGame = false;
     document.querySelector('.skip-btn').style.display = 'none';
     displayGameQuestion();
