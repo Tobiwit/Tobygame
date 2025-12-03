@@ -353,12 +353,17 @@ function nextQuestion() {
     
     currentPlayerIndex = (currentPlayerIndex + 1) % gamePlayers.length;
     hasVotedInGame = false;
+
+    const skipBtn = document.querySelector('.skip-btn');
+    skipBtn.style.display = 'block';
+    
     displayGameQuestion();
 }
 
 function skipQuestion() {
     currentPlayerIndex = (currentPlayerIndex + 1) % gamePlayers.length;
     hasVotedInGame = false;
+    document.querySelector('.skip-btn').style.display = 'none';
     displayGameQuestion();
 }
 
