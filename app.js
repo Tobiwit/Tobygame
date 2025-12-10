@@ -317,10 +317,6 @@ async function startGame() {
 }
 
 function displayGameQuestion() {
-    /*
-    const gameVoteMessage = document.getElementById('gameVoteMessage');
-    gameVoteMessage.textContent = '';*/
-    
     if (gameQuestions.length === 0) {
         document.getElementById('gameQuestion').innerHTML = '<p style="color: #888;">No more questions! Game over.</p>';
         document.getElementById('gameVoteButtons').style.display = 'none';
@@ -331,18 +327,26 @@ function displayGameQuestion() {
     const question = gameQuestions[0];
     
     document.getElementById('currentPlayer').textContent = player;
-    document.getElementById('gameQuestion').innerHTML = `
-    <div style="flex:1 gap: 10px;">
+    
+    // Find or create the question content div (but NOT the vote buttons)
+    let questionContent = document.querySelector('#gameQuestion > .question-content');
+    if (!questionContent) {
+        questionContent = document.createElement('div');
+        questionContent.className = 'question-content';
+        // Insert after the vote bubbles
+        document.getElementById('gameQuestion').insertBefore(questionContent, document.getElementById('gameVoteButtons').nextSibling);
+    }
+    
+    questionContent.innerHTML = `
         <span class="category">${question.category}</span>
         <div style="margin-top: 15px;">${question.text} ${question.scale}</div>
-        </div>
     `;
     
     const voteButtons = document.getElementById('gameVoteButtons');
     if (hasVotedInGame) {
         voteButtons.style.display = 'none';
     } else {
-        voteButtons.style.display = 'grid';
+        voteButtons.style.display = 'block';
     }
 }
 
