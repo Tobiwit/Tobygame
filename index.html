@@ -98,8 +98,14 @@
                     </div>
                 </div>
                 <div class="game-buttons">
-                    <button onclick="nextQuestion()" class="next-btn">Next ➡️</button>
+                    <button onclick="nextQuestion()" class="next-btn">Next Player</button>
                     <button class="skip-btn" onclick="skipQuestion()">⟳</button>
+                </div>
+                <button onclick="toggleChaosModifier()" class="chaos-btn">🔥 Chaos Modifier</button>
+                <div id="chaosModifierCard" class="chaos-modifier-card" style="display: none;">
+                    <div class="chaos-modifier-content">
+                        <p id="chaosModifierText"></p>
+                    </div>
                 </div>
                 <button class="secondary" onclick="endGame()">End Game</button>
             </div>

@@ -360,6 +360,12 @@ function nextQuestion() {
 
     const skipBtn = document.querySelector('.skip-btn');
     skipBtn.style.display = 'block';
+    
+    // Reset chaos modifier
+    const chaosBtn = document.querySelector('.chaos-btn');
+    const chaosCard = document.getElementById('chaosModifierCard');
+    chaosBtn.style.display = 'block';
+    chaosCard.style.display = 'none';
 
     displayGameQuestion();
 }
@@ -371,6 +377,13 @@ function skipQuestion() {
     
     hasVotedInGame = false;
     document.querySelector('.skip-btn').style.display = 'none';
+    
+    // Reset chaos modifier
+    const chaosBtn = document.querySelector('.chaos-btn');
+    const chaosCard = document.getElementById('chaosModifierCard');
+    chaosBtn.style.display = 'block';
+    chaosCard.style.display = 'none';
+    
     displayGameQuestion();
 }
 
@@ -481,6 +494,44 @@ async function gameVote(voteType) {
     }
 }
 
+const CHAOS_MODIFIERS = [
+    "Everyone picks the number for the person on their left",
+    "Everyone picks the number for the person on their right",
+    "Everyone picks the number for the person on their left",
+    "Everyone picks the number for the person on their right",
+    "Everyone picks the number for the question asker",
+    "Every number can only be picked once",
+    "Everyone answers for [RandomPlayer]",
+    "[RandomPlayer] answers twice and lies about one answer",
+    "The person on your right can change your answer if they don't agree",
+];
+
+function toggleChaosModifier() {
+    const card = document.getElementById('chaosModifierCard');
+    const btn = event.target.closest('.chaos-btn');
+    const text = document.getElementById('chaosModifierText');
+    
+    // Generate modifier with random player names
+    let randomModifier = CHAOS_MODIFIERS[Math.floor(Math.random() * CHAOS_MODIFIERS.length)];
+    
+    // Replace placeholder text with actual random player
+    randomModifier = randomModifier.replace('[RandomPlayer]', getRandomPlayer());
+    
+    text.textContent = randomModifier;
+    btn.style.display = 'none';
+    card.style.display = 'block';
+}
+
+function getRandomPlayer() {
+    if (gamePlayers.length === 0) return 'Player';
+    
+    const availablePlayers = gamePlayers.filter((_, index) => index !== currentPlayerIndex);
+    
+    if (availablePlayers.length === 0) return gamePlayers[currentPlayerIndex];
+    
+    return availablePlayers[Math.floor(Math.random() * availablePlayers.length)];
+}
+
 window.checkPassword = checkPassword;
 window.showScreen = showScreen;
 window.addQuestion = addQuestion;
@@ -491,6 +542,8 @@ window.nextQuestion = nextQuestion;
 window.skipQuestion = skipQuestion;
 window.endGame = endGame;
 window.voteInGame = voteInGame;
+window.toggleChaosModifier = toggleChaosModifier;
+window.getRandomPlayer = getRandomPlayer;
 
 window.addEventListener('DOMContentLoaded', () => {
     const authorized = localStorage.getItem('authorized');
