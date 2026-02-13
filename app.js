@@ -32,6 +32,11 @@ let playerCardsList = [];
 
 let hasVotedInGame = false;
 
+// Preserve game state when editing players
+let isEditingPlayers = false;
+let savedGameQuestions = [];
+let savedPlayerIndex = 0;
+
 function checkPassword() {
     const input = document.getElementById('passwordInput');
     const error = document.getElementById('passwordError');
@@ -67,6 +72,9 @@ function showScreen(screenId) {
 }
 
 function loadCurrentPlayersForEdit() {
+    isEditingPlayers = true;
+    savedGameQuestions = [...gameQuestions];
+    savedPlayerIndex = currentPlayerIndex;
     playerCardsList = [...gamePlayers];
     showScreen('startGameScreen');
 }
@@ -340,22 +348,30 @@ async function startGame() {
     }
     
     try {
-        const querySnapshot = await getDocs(collection(db, 'questions'));
-        gameQuestions = [];
-        
-        querySnapshot.forEach((doc) => {
-            gameQuestions.push({ id: doc.id, ...doc.data() });
-        });
-        
-        if (gameQuestions.length === 0) {
-            message.textContent = 'No questions available. Add some first!';
-            message.className = 'message error';
-            return;
+        // If editing players, preserve the question stack and position
+        if (isEditingPlayers) {
+            isEditingPlayers = false;
+            gameQuestions = [...savedGameQuestions];
+            currentPlayerIndex = savedPlayerIndex;
+        } else {
+            // Starting fresh game - load new questions
+            const querySnapshot = await getDocs(collection(db, 'questions'));
+            gameQuestions = [];
+            
+            querySnapshot.forEach((doc) => {
+                gameQuestions.push({ id: doc.id, ...doc.data() });
+            });
+            
+            if (gameQuestions.length === 0) {
+                message.textContent = 'No questions available. Add some first!';
+                message.className = 'message error';
+                return;
+            }
+            
+            gamePlayers = shuffleArray(gamePlayers);
+            gameQuestions = weightedShuffleQuestions(gameQuestions);
+            currentPlayerIndex = 0;
         }
-        
-        gamePlayers = shuffleArray(gamePlayers);
-        gameQuestions = weightedShuffleQuestions(gameQuestions);
-        currentPlayerIndex = 0;
         
         showScreen('gameScreen');
         displayGameQuestion();
@@ -547,10 +563,8 @@ async function gameVote(voteType) {
 const CHAOS_MODIFIERS = [
     "Everyone picks the number for the person on their left",
     "Everyone picks the number for the person on their right",
-    "Everyone picks the number for the person on their left",
-    "Everyone picks the number for the person on their right",
     "Everyone picks the number for the question asker",
-    "Every number can only be picked once",
+    "All players but there card in sequence from highest to lowest",
     "Everyone answers for [RandomPlayer]",
     "[RandomPlayer] answers twice and lies about one answer",
     "The person on your right can change your answer if they don't agree",
