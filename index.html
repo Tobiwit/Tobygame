@@ -76,8 +76,12 @@
         <div id="startGameScreen" class="screen">
             <div class="card">
                 <h2>🎲 Start Game</h2>
-                <p>Enter player names (comma-separated):</p>
-                <textarea id="playerNames" placeholder="Alice, Bob, Charlie..." rows="3"></textarea>
+                <p>Add players:</p>
+                <div id="playersList" class="players-cards-container"></div>
+                <div class="player-input-wrapper">
+                    <input type="text" id="playerNameInput" placeholder="Enter player name..." autocomplete="off">
+                    <button id="addPlayerBtn" class="add-player-btn" onclick="addPlayer()">+</button>
+                </div>
                 <button onclick="startGame()">Start Game</button>
                 <button class="secondary" onclick="showScreen('mainMenu')">Back</button>
                 <p id="gameSetupMessage" class="message"></p>

@@ -28,6 +28,7 @@ let currentVoteIndex = 0;
 let gameQuestions = [];
 let gamePlayers = [];
 let currentPlayerIndex = 0;
+let playerCardsList = [];
 
 let hasVotedInGame = false;
 
@@ -56,6 +57,10 @@ function showScreen(screenId) {
         loadVoteQuestions();
     } else if (screenId === 'seeQuestionsScreen') {
         loadAllQuestions();
+    } else if (screenId === 'startGameScreen') {
+        playerCardsList = [];
+        renderPlayerCards();
+        document.getElementById('playerNameInput').focus();
     }
 }
 
@@ -271,17 +276,55 @@ async function loadAllQuestions() {
     }
 }
 
+function addPlayer() {
+    const input = document.getElementById('playerNameInput');
+    const name = input.value.trim();
+    
+    if (!name) {
+        return;
+    }
+    
+    if (playerCardsList.includes(name)) {
+        alert('Player already added!');
+        return;
+    }
+    
+    playerCardsList.push(name);
+    input.value = '';
+    renderPlayerCards();
+    input.focus();
+}
+
+function removePlayer(index) {
+    playerCardsList.splice(index, 1);
+    renderPlayerCards();
+}
+
+function renderPlayerCards() {
+    const container = document.getElementById('playersList');
+    container.innerHTML = '';
+    
+    playerCardsList.forEach((name, index) => {
+        const card = document.createElement('div');
+        card.className = 'player-card';
+        card.innerHTML = `
+            <span>${name}</span>
+            <button class="remove-player-btn" onclick="removePlayer(${index})">✕</button>
+        `;
+        container.appendChild(card);
+    });
+}
+
 async function startGame() {
-    const playersInput = document.getElementById('playerNames').value.trim();
     const message = document.getElementById('gameSetupMessage');
     
-    if (!playersInput) {
-        message.textContent = 'Please enter at least one player name.';
+    if (playerCardsList.length === 0) {
+        message.textContent = 'Please add at least one player.';
         message.className = 'message error';
         return;
     }
     
-    gamePlayers = playersInput.split(',').map(name => name.trim()).filter(name => name);
+    gamePlayers = [...playerCardsList];
     
     if (gamePlayers.length === 0) {
         message.textContent = 'Please enter valid player names.';
@@ -391,7 +434,7 @@ function endGame() {
     gameQuestions = [];
     gamePlayers = [];
     currentPlayerIndex = 0;
-    document.getElementById('playerNames').value = '';
+    //document.getElementById('playerNames').value = '';
     showScreen('mainMenu');
 }
 
@@ -544,6 +587,8 @@ window.endGame = endGame;
 window.voteInGame = voteInGame;
 window.toggleChaosModifier = toggleChaosModifier;
 window.getRandomPlayer = getRandomPlayer;
+window.addPlayer = addPlayer;
+window.removePlayer = removePlayer;
 
 window.addEventListener('DOMContentLoaded', () => {
     const authorized = localStorage.getItem('authorized');
@@ -551,5 +596,15 @@ window.addEventListener('DOMContentLoaded', () => {
         showScreen('mainMenu');
     } else {
         showScreen('passwordScreen');
+    }
+    
+    // Add Enter key support for player input
+    const playerInput = document.getElementById('playerNameInput');
+    if (playerInput) {
+        playerInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addPlayer();
+            }
+        });
     }
 });
