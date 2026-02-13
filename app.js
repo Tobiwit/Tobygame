@@ -58,10 +58,17 @@ function showScreen(screenId) {
     } else if (screenId === 'seeQuestionsScreen') {
         loadAllQuestions();
     } else if (screenId === 'startGameScreen') {
-        playerCardsList = [];
+        if (gamePlayers.length === 0) {
+            playerCardsList = [];
+        }
         renderPlayerCards();
         document.getElementById('playerNameInput').focus();
     }
+}
+
+function loadCurrentPlayersForEdit() {
+    playerCardsList = [...gamePlayers];
+    showScreen('startGameScreen');
 }
 
 async function addQuestion() {
@@ -589,6 +596,7 @@ window.toggleChaosModifier = toggleChaosModifier;
 window.getRandomPlayer = getRandomPlayer;
 window.addPlayer = addPlayer;
 window.removePlayer = removePlayer;
+window.loadCurrentPlayersForEdit = loadCurrentPlayersForEdit;
 
 window.addEventListener('DOMContentLoaded', () => {
     const authorized = localStorage.getItem('authorized');

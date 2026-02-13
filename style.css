@@ -150,7 +150,7 @@ button.secondary:hover {
 .question-card {
     background: #f8f9fa;
     padding: 20px;
-    margin-bottom: 20px;
+    margin-bottom: 40px;
     border-radius: 10px;
 }
 
@@ -457,4 +457,67 @@ button.secondary:hover {
     flex-shrink: 0;
     font-size: 32px;
     font-weight: 400;
+}
+
+/* Game screen top bar */
+.game-top-bar-container {
+    background: white;
+    border-radius: 20px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.game-top-bar {
+    display: flex;
+    gap: 10px;
+}
+
+.top-bar-btn {
+    flex: 1;
+    padding: 12px 15px;
+    font-size: 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    margin-bottom: 0;
+    border-radius: 10px;
+}
+
+.top-bar-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.game-card {
+    padding: 30px 30px 20px 30px;
+}
+
+.skip-btn.full-width {
+    width: 100%;
+    background: linear-gradient(135deg, #e53880 0%, #ba3c96 100%);
+    font-size: 18px;
+    font-weight: 600;
+    height: auto;
+}
+
+.skip-btn.full-width:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(243, 156, 18, 0.4);
+}
+
+.skip-btn.full-width span {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.next-btn-game {
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    margin-bottom: 15px;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.next-btn-game:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
 }
