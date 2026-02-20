@@ -43,11 +43,31 @@ function checkPassword() {
     
     if (input.value === HARDCODED_PASSWORD) {
         localStorage.setItem('authorized', 'true');
-        showScreen('mainMenu');
+        const nickname = localStorage.getItem('nickname');
+        if (nickname) {
+            showScreen('mainMenu');
+        } else {
+            showScreen('nicknameScreen');
+        }
         error.textContent = '';
         input.value = '';
     } else {
         error.textContent = 'Incorrect password. Try again.';
+        input.value = '';
+    }
+}
+
+function setNickname() {
+    const input = document.getElementById('nicknameInput');
+    const error = document.getElementById('nicknameError');
+    
+    if (input.value.trim() !== '') {
+        localStorage.setItem('nickname', input.value.trim());
+        showScreen('mainMenu');
+        error.textContent = '';
+        input.value = '';
+    } else {
+        error.textContent = 'Please enter a nickname.';
         input.value = '';
     }
 }
@@ -84,6 +104,7 @@ async function addQuestion() {
     const scale = document.getElementById('scaleText').value.trim();
     const category = document.getElementById('questionCategory').value;
     const message = document.getElementById('addQuestionMessage');
+    const nickname = localStorage.getItem('nickname');
     
     if (!text) {
         message.textContent = 'Please enter a question.';
@@ -104,7 +125,8 @@ async function addQuestion() {
             scale: scale,
             likes: 0,
             dislikes: 0,
-            createdAt: new Date()
+            createdAt: new Date(),
+            nickname: nickname || '???'
         });
         
         document.getElementById('questionText').value = '';
@@ -173,10 +195,8 @@ function displayCurrentVoteQuestion() {
 }
 
 async function voteInGame(voteType) {
-    console.log('voteInGame called with:', voteType);
     const question = gameQuestions[0];
     const voteButtons = document.getElementById('gameVoteButtons');
-    console.log('Vote buttons element:', voteButtons);
 
     
 
@@ -348,6 +368,17 @@ async function startGame() {
     }
     
     try {
+        // --- USAGE TRACKING START ---
+        if (!isEditingPlayers) {
+            const nickname = localStorage.getItem('nickname') || 'Anonymous';
+            await addDoc(collection(db, 'usage'), {
+                nickname: nickname,
+                playerCount: gamePlayers.length,
+                playerNames: gamePlayers,
+                createdAt: new Date()
+            });
+        }
+        // --- USAGE TRACKING END ---
         // If editing players, preserve the question stack and position
         if (isEditingPlayers) {
             isEditingPlayers = false;
@@ -597,6 +628,7 @@ function getRandomPlayer() {
 }
 
 window.checkPassword = checkPassword;
+window.setNickname = setNickname;
 window.showScreen = showScreen;
 window.addQuestion = addQuestion;
 window.vote = vote;
@@ -614,8 +646,14 @@ window.loadCurrentPlayersForEdit = loadCurrentPlayersForEdit;
 
 window.addEventListener('DOMContentLoaded', () => {
     const authorized = localStorage.getItem('authorized');
+    const nickname = localStorage.getItem('nickname');
     if (authorized === 'true') {
-        showScreen('mainMenu');
+        if (nickname) {
+            showScreen('mainMenu');
+        } else {
+            showScreen('nicknameScreen');
+        }
+        
     } else {
         showScreen('passwordScreen');
     }
