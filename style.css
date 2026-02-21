@@ -121,6 +121,19 @@ button.secondary:hover {
     margin-bottom: 15px;
 }
 
+#startbutton {
+    margin-top: 20px;
+    margin-bottom: 35px;
+    height: 70px;
+    background: linear-gradient(135deg, #d323b0 0%, #0ea1df 100%);
+    font-size: 24px;
+}
+
+#startbutton:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(234, 0, 255, 0.329);
+}
+
 .error {
     color: #e74c3c;
     text-align: center;
@@ -257,7 +270,7 @@ button.secondary:hover {
     }
     
     .card {
-        margin-top: 50px;
+        margin-top: 20px;
         padding: 20px;
     }
     
@@ -471,7 +484,7 @@ button.secondary:hover {
     background: white;
     border-radius: 20px;
     padding: 15px;
-    margin-bottom: 15px;
+    margin-bottom: 20px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
 }
 
@@ -496,7 +509,7 @@ button.secondary:hover {
 }
 
 .game-card {
-    padding: 30px 30px 20px 30px;
+    padding: 25px 25px 15px 25px;
 }
 
 .skip-btn.full-width {

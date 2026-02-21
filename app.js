@@ -595,10 +595,15 @@ const CHAOS_MODIFIERS = [
     "Everyone picks the number for the person on their left",
     "Everyone picks the number for the person on their right",
     "Everyone picks the number for the question asker",
-    "All players but there card in sequence from highest to lowest",
+    "All players put their card in sequence from highest to lowest",
+    "Everyone answers for [RandomPlayer]",
     "Everyone answers for [RandomPlayer]",
     "[RandomPlayer] answers twice and lies about one answer",
     "The person on your right can change your answer if they don't agree",
+    "Answer how you think the group would rate you",
+    "First person you assign is worth three sips",
+    "Answer what your parents would answer for you",
+    "Answer what your Ex would answer for you",
 ];
 
 function toggleChaosModifier() {
