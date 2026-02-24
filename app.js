@@ -375,7 +375,17 @@ async function startGame() {
                 nickname: nickname,
                 playerCount: gamePlayers.length,
                 playerNames: gamePlayers,
-                createdAt: new Date()
+                createdAt: new Date(),
+                editedPlayers: false
+            });
+        } else {
+            const nickname = localStorage.getItem('nickname') || 'Anonymous';
+            await addDoc(collection(db, 'usage'), {
+                nickname: nickname,
+                playerCount: gamePlayers.length,
+                playerNames: gamePlayers,
+                createdAt: new Date(),
+                editedPlayers: true
             });
         }
         // --- USAGE TRACKING END ---
