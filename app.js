@@ -410,7 +410,9 @@ async function startGame() {
             }
             
             gamePlayers = shuffleArray(gamePlayers);
-            gameQuestions = weightedShuffleQuestions(gameQuestions);
+            gameQuestions = randomShuffleQuestions(gameQuestions);
+            //use the weightedShuffle if you want to prioritize higher rated questions, or randomShuffle for a pure random order. You can switch between them as needed.
+            //gameQuestions = weightedShuffleQuestions(gameQuestions);
             currentPlayerIndex = 0;
         }
         
@@ -549,6 +551,10 @@ function weightedShuffleQuestions(questions) {
     }
     
     return uniqueQuestions;
+}
+
+function randomShuffleQuestions(questions) {
+    return shuffleArray(questions);
 }
 
 async function gameVote(voteType) {
