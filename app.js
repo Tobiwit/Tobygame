@@ -665,6 +665,36 @@ window.addPlayer = addPlayer;
 window.removePlayer = removePlayer;
 window.loadCurrentPlayersForEdit = loadCurrentPlayersForEdit;
 
+// Feedback functionality
+async function sendFeedback() {
+    const input = document.getElementById('feedbackInput');
+    const message = document.getElementById('feedbackMessage');
+    const feedback = input.value.trim();
+    const nickname = localStorage.getItem('nickname') || 'Anonymous';
+    if (!feedback) {
+        message.textContent = 'Please enter your feedback.';
+        message.className = 'message error';
+        return;
+    }
+    try {
+        await addDoc(collection(db, 'feedback'), {
+            feedback: feedback,
+            nickname: nickname,
+            createdAt: new Date()
+        });
+        input.value = '';
+        message.textContent = '✅ Thank you for your feedback!';
+        message.className = 'message success';
+        setTimeout(() => { message.textContent = ''; }, 3000);
+    } catch (error) {
+        console.error('Error sending feedback:', error);
+        message.textContent = '❌ Error sending feedback.';
+        message.className = 'message error';
+    }
+}
+
+window.sendFeedback = sendFeedback;
+
 window.addEventListener('DOMContentLoaded', () => {
     const authorized = localStorage.getItem('authorized');
     const nickname = localStorage.getItem('nickname');

@@ -297,6 +297,13 @@ button.secondary:hover {
     overflow-y: auto;
 }
 
+.logo{
+    display: block;
+    margin: 10px auto 50px auto;
+    width: 100%;
+    height: auto;
+}
+
 .game-vote-bubbles {
     position: absolute;
     width: 100%;

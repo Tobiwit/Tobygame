@@ -28,12 +28,13 @@
 
         <div id="mainMenu" class="screen">
             <div class="card">
-                <h1 style="font-size: 28px; text-align: center; margin-bottom: 20px; color: rgb(138, 74, 211);">T O B Y G A M E</h1>
+                <img src="assets/logo.png" alt="Tobygame Logo" class="logo">
                 <div class="menu-buttons">
-                    <button id="startbutton" onclick="showScreen('startGameScreen')">Start Game</button>
-                    <button onclick="showScreen('addQuestionScreen')">✒️ Add Question</button>
-                    <button onclick="showScreen('voteQuestionsScreen')">👍 Vote Questions</button>
-                    <button onclick="showScreen('seeQuestionsScreen')">📋 See Questions</button>
+                        <button id="startbutton" onclick="showScreen('startGameScreen')">Start Game</button>
+                        <button onclick="showScreen('addQuestionScreen')">✒️ Add Question</button>
+                        <button onclick="showScreen('voteQuestionsScreen')">👍 Vote Questions</button>
+                        <button onclick="showScreen('seeQuestionsScreen')">📋 See Questions</button>
+                        <button onclick="showScreen('feedbackScreen')">💡 Feedback / Suggestions</button>
                 </div>
             </div>
         </div>
@@ -78,9 +79,21 @@
             <div class="card">
                 <h2>📋 All Questions</h2>
                 <div id="questionsList"></div>
-                <button class="secondary" onclick="showScreen('mainMenu')">Back</button>
+                    <button class="secondary" onclick="showScreen('mainMenu')">Back</button>
             </div>
         </div>
+
+            <div id="feedbackScreen" class="screen">
+                <div class="card">
+                    <h2 style="text-align:center;">Feedback / Suggestions</h2>
+                    <textarea id="feedbackInput" rows="8" style="width:90%;margin:20px auto;display:block;font-size:1.1em;padding:10px;resize:vertical;max-width:600px;min-height:120px;"></textarea>
+                    <div style="text-align:center;margin:10px 0;">
+                        <button onclick="sendFeedback()" style="padding:10px 30px;font-size:1.1em;">Send</button>
+                        <button onclick="showScreen('mainMenu')" style="padding:10px 30px;font-size:1.1em;">Back</button>
+                    </div>
+                    <div id="feedbackMessage" style="text-align:center;margin-top:10px;"></div>
+                </div>
+            </div>
 
         <div id="startGameScreen" class="screen">
             <div class="card">
