@@ -31,11 +31,12 @@
             <div class="card">
                 <img src="assets/logo.png" alt="Tobygame Logo" class="logo">
                 <div class="menu-buttons">
-                        <button id="startbutton" onclick="showScreen('startGameScreen')">Start Game</button>
-                        <button onclick="showScreen('addQuestionScreen')">✒️ Add Question</button>
-                        <button onclick="showScreen('voteQuestionsScreen')">👍 Vote Questions</button>
-                        <button onclick="showScreen('seeQuestionsScreen')">📋 See Questions</button>
-                        <button onclick="showScreen('feedbackScreen')">💡 Feedback / Suggestions</button>
+                    <button id="startbutton" onclick="showScreen('startGameScreen')">Start Game</button>
+                    <button onclick="showScreen('addQuestionScreen')">✒️ Add Question</button>
+                    <button onclick="showScreen('voteQuestionsScreen')">👍 Vote Questions</button>
+                    <button onclick="showScreen('seeQuestionsScreen')">📋 See Questions</button>
+                    <button onclick="showScreen('feedbackScreen')">💡 Feedback / Suggestions</button>
+                    <button onclick="showScreen('tutorialScreen')">📖 Tutorial</button>
                 </div>
             </div>
         </div>
@@ -143,5 +144,23 @@
     </div>
 
     <script type="module" src="app.js"></script>
+</div>
+
+    <div id="tutorialScreen" class="screen">
+        <div class="card tutorial-card">
+            <h2>📖 Tutorial</h2>
+            <div class="tutorial-image-container">
+                <img id="tutorialImage" src="assets/tutorial/step1.png" alt="Tutorial Step" style="max-width:100%;height:auto;">
+            </div>
+            <div class="tutorial-text-container">
+                <p id="tutorialText">Welcome to the tutorial! Click forward to see the next step.</p>
+            </div>
+            <div class="tutorial-nav-buttons">
+                <button id="tutorialBackBtn">Back</button>
+                <button id="tutorialForwardBtn">Forward</button>
+            </div>
+            <button class="secondary" onclick="showScreen('mainMenu')">Back to Menu</button>
+        </div>
+    </div>
 </body>
 </html>

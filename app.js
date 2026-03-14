@@ -1,3 +1,60 @@
+const tutorialSteps = [
+    {
+        image: 'assets/tutorial/step1_cards.png',
+        text: 'Lay out a deck of cards (Ace through 10) in a straight line to create a numerical scale. If you don’t have cards, numbered scraps of paper work just fine. Give each player an identical object (like a coin or a token) or a face-down card to use as their "voting chip."'
+    },
+    {
+        image: 'assets/tutorial/step2_vote.png',
+        text: 'The active player (the Questioner) reads a question aloud. Note: If you don´t like the question, you are allowed one "skip" per turn. \nThe Questioner then closes their eyes. While their eyes are shut, every other player places their voting chip on the scale (1–10) based on their personal answer to the question.'
+    },
+    {
+        image: 'assets/tutorial/step3_assign.png',
+        text: 'Once everyone has voted, the Questioner opens their eyes and must try to match each vote to the correct player. You must assign votes one by one. Once you assign a card/vote to a player, you cannot take it back or change your mind. You can only assign one vote to each player, even if your first guess was wrong.'
+    },
+    {
+        image: 'assets/tutorial/step4_specialcaseCount.png',
+        text: 'For questions that require a specific count rather than a "rating" the Ace (1) represents a value of 0 or 1. The 10 represents 10 or more. The Questioner doesn’t need to guess the exact number (e.g., whether it’s a 0 or a 1), and players don’t have to clarify which one they meant.'
+    },
+    {
+        image: 'assets/tutorial/step5_verifyAndDrink.png',
+        text: 'As the Questioner assigns a vote to a player, that player must reveal if the guess was correct. If they guessed correctly, the assigned player takes a sip. If they guessed incorrectly, the Questioner takes a sip. If a player was never correctly identified, they never have to reveal what their actual answer was! The turn ends once everyone has been assigned a guess. Then its the next player’s turn.'
+    }
+];
+
+let currentTutorialStep = 0;
+
+function renderTutorialStep() {
+    const img = document.getElementById('tutorialImage');
+    const text = document.getElementById('tutorialText');
+    img.src = tutorialSteps[currentTutorialStep].image;
+    text.textContent = tutorialSteps[currentTutorialStep].text;
+    document.getElementById('tutorialBackBtn').disabled = currentTutorialStep === 0;
+    document.getElementById('tutorialForwardBtn').disabled = currentTutorialStep === tutorialSteps.length - 1;
+}
+
+function tutorialBack() {
+    if (currentTutorialStep > 0) {
+        currentTutorialStep--;
+        renderTutorialStep();
+    }
+}
+
+function tutorialForward() {
+    if (currentTutorialStep < tutorialSteps.length - 1) {
+        currentTutorialStep++;
+        renderTutorialStep();
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    const backBtn = document.getElementById('tutorialBackBtn');
+    const forwardBtn = document.getElementById('tutorialForwardBtn');
+    if (backBtn && forwardBtn) {
+        backBtn.addEventListener('click', tutorialBack);
+        forwardBtn.addEventListener('click', tutorialForward);
+        renderTutorialStep();
+    }
+});
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
 import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, increment, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
