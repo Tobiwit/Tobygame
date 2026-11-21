@@ -358,7 +358,7 @@ textarea.field {
 }
 
 .hero-mark {
-    width: min(58%, 240px);
+    height: clamp(120px, 40%, 176px);
     animation: float 7s ease-in-out infinite;
 }
 .hero-logo {
