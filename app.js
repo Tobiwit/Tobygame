@@ -1,3 +1,1034 @@
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, increment } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+const HARDCODED_PASSWORD = "ohlala";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyAP9HccB7Ri2KXobu5S1p_FJ7L6QeA2GHQ",
+    authDomain: "tobygame-df9f1.firebaseapp.com",
+    projectId: "tobygame-df9f1",
+    storageBucket: "tobygame-df9f1.firebasestorage.app",
+    messagingSenderId: "1070543180902",
+    appId: "1:1070543180902:web:611bdb0b28e998fd7189a7",
+    measurementId: "G-SGZFK0GKYT"
+};
+
+let app;
+let db;
+
+try {
+    app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+} catch (error) {
+    console.error("Firebase initialization error:", error);
+}
+
+/* =========================================================
+   Colour themes
+   c = field colour, c2/c3 = glow colours, on = text on the field
+   ========================================================= */
+// Flat cobalt field with a tangerine accent for primary buttons.
+const BRAND = { name: 'brand', c: '#1E4FFF', c2: '#1E4FFF', c3: '#1E4FFF', on: '#ffffff', accent: '#F25C00', accentOn: '#ffffff' };
+
+// Player palette, ordered so neighbouring players never look alike.
+const PALETTE = [
+    { name: 'tangerine',   c: '#F25C00', c2: '#FFC300', c3: '#FF3D00', on: '#ffffff' },
+    { name: 'ultraviolet', c: '#5A33F0', c2: '#1EC8FF', c3: '#7B2CF5', on: '#ffffff' },
+    { name: 'bubblegum',   c: '#E81E76', c2: '#FF9A3C', c3: '#C8106A', on: '#ffffff' },
+    { name: 'jungle',      c: '#0C9F58', c2: '#C6F432', c3: '#067F55', on: '#ffffff' },
+    { name: 'electric',    c: '#1769FF', c2: '#2BE3F2', c3: '#3A3CF0', on: '#ffffff' },
+    { name: 'sunshine',    c: '#FFC21A', c2: '#FFF27A', c3: '#FF9500', on: '#1F1604', deep: '#7A5000' },
+    { name: 'cherry',      c: '#E42232', c2: '#FF8A00', c3: '#B80F2C', on: '#ffffff' },
+    { name: 'lagoon',      c: '#00968F', c2: '#7CF0C8', c3: '#00718F', on: '#ffffff' },
+    { name: 'grape',       c: '#9230E0', c2: '#FF5FCB', c3: '#6A1FD0', on: '#ffffff' },
+    { name: 'lime',        c: '#7ACC12', c2: '#E8FF5A', c3: '#2FA83A', on: '#13200A', deep: '#3B6A00' },
+];
+
+const THEMES = Object.fromEntries([BRAND, ...PALETTE].map(t => [t.name, t]));
+
+const CATEGORIES = [
+    { value: '🔥 Spicy', theme: 'cherry' },
+    { value: '😈 Kinky', theme: 'grape' },
+    { value: '🧨 Explosive group questions', theme: 'tangerine' },
+    { value: '✨ Confidence', theme: 'sunshine' },
+    { value: '💕 Love & Dating', theme: 'bubblegum' },
+    { value: '🥂 Party', theme: 'lagoon' },
+    { value: '💭 Deep / Emotional', theme: 'electric' },
+    { value: '✨ Random', theme: 'ultraviolet' },
+];
+
+const themeMeta = document.querySelector('meta[name="theme-color"]');
+
+function applyTheme(theme) {
+    const t = theme || BRAND;
+    const root = document.documentElement.style;
+    root.setProperty('--c', t.c);
+    root.setProperty('--c2', t.c2);
+    root.setProperty('--c3', t.c3);
+    root.setProperty('--on', t.on);
+    root.setProperty('--accent', t.accent || t.c);
+    root.setProperty('--accent-on', t.accentOn || t.on);
+    root.setProperty('--deep', t.deep || 'color-mix(in oklab, var(--c) 74%, #000)');
+    if (themeMeta) themeMeta.setAttribute('content', t.c);
+}
+
+/* =========================================================
+   Menu halftone field
+   The dots sit on a fixed offset (45°) grid and never move. Four invisible
+   colour blobs drift over it on slow Lissajous paths; each dot's size is
+   set by the strongest blob over it, so dots swell as a blob arrives and
+   shrink away as it leaves. Drawn on a canvas, only while the menu is open.
+   ========================================================= */
+const DOT_CELL = 9;      // grid spacing in CSS px
+const DOT_SCALE = 0.36;  // max dot radius as a share of the spacing (< .5 keeps gaps)
+
+// x / y: rest position as a share of the hero; ax / ay: drift in px; px / py: seconds per swing
+const FIELD_BLOBS = [
+    { color: '#F25C00', r: 120, x: 0.10, y: 0.12, ax: 70, ay: 50, px: 18, py: 23, phase: 0 },
+    { color: '#FFC21A', r: 85,  x: 0.90, y: 0.90, ax: 60, ay: 45, px: 22, py: 17, phase: 2 },
+    { color: '#E81E76', r: 65,  x: 0.22, y: 0.78, ax: 55, ay: 40, px: 16, py: 21, phase: 4 },
+    { color: '#2BE3F2', r: 55,  x: 0.78, y: 0.20, ax: 50, ay: 55, px: 20, py: 15, phase: 1 },
+];
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const dotField = { canvas: null, ctx: null, w: 0, h: 0, dpr: 1, raf: 0, start: performance.now() };
+
+function drawDotField(now) {
+    const { ctx, w, h, dpr } = dotField;
+    if (!ctx || !w || !h) return;
+    const time = reduceMotion.matches ? 4 : (now - dotField.start) / 1000;
+    const TAU = Math.PI * 2;
+
+    const blobs = FIELD_BLOBS.map(b => {
+        const pulse = 0.88 + 0.12 * Math.sin(time * TAU / (b.px * 0.8) + b.phase * 1.7);
+        return {
+            x: b.x * w + Math.sin(time * TAU / b.px + b.phase) * b.ax,
+            y: b.y * h + Math.sin(time * TAU / b.py + b.phase * 1.3) * b.ay,
+            r: b.r * pulse,
+        };
+    });
+    const paths = FIELD_BLOBS.map(() => new Path2D());
+
+    const rows = Math.ceil(h / DOT_CELL) + 1;
+    const cols = Math.ceil(w / DOT_CELL) + 1;
+    for (let row = 0; row < rows; row++) {
+        const cy = row * DOT_CELL + DOT_CELL / 2;
+        const shift = row % 2 ? DOT_CELL / 2 : 0;
+        for (let col = -1; col < cols; col++) {
+            const cx = col * DOT_CELL + DOT_CELL / 2 + shift;
+            let best = 0;
+            let owner = -1;
+            for (let i = 0; i < blobs.length; i++) {
+                const b = blobs[i];
+                const dx = cx - b.x;
+                const dy = cy - b.y;
+                const d2 = dx * dx + dy * dy;
+                if (d2 >= b.r * b.r) continue;
+                const t = Math.pow(1 - Math.sqrt(d2) / b.r, 1.3);
+                if (t > best) { best = t; owner = i; }
+            }
+            if (owner < 0) continue;
+            const rad = Math.sqrt(best) * DOT_CELL * DOT_SCALE;
+            if (rad < 0.3) continue;
+            paths[owner].moveTo(cx + rad, cy);
+            paths[owner].arc(cx, cy, rad, 0, TAU);
+        }
+    }
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    paths.forEach((path, i) => {
+        ctx.fillStyle = FIELD_BLOBS[i].color;
+        ctx.fill(path);
+    });
+}
+
+function menuIsOpen() {
+    return $('mainMenu')?.classList.contains('active') && !document.hidden;
+}
+
+function tickDotField(now) {
+    if (!menuIsOpen()) { dotField.raf = 0; return; }
+    drawDotField(now);
+    dotField.raf = requestAnimationFrame(tickDotField);
+}
+
+function startDotField() {
+    if (!dotField.ctx) return;
+    if (reduceMotion.matches) { drawDotField(performance.now()); return; }
+    if (!dotField.raf && menuIsOpen()) dotField.raf = requestAnimationFrame(tickDotField);
+}
+
+function setupDotField() {
+    const canvas = $('dotField');
+    const ctx = canvas?.getContext?.('2d');
+    if (!ctx) return;
+    dotField.canvas = canvas;
+    dotField.ctx = ctx;
+
+    const resize = () => {
+        const rect = canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        dotField.dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
+        dotField.w = rect.width;
+        dotField.h = rect.height;
+        canvas.width = Math.round(rect.width * dotField.dpr);
+        canvas.height = Math.round(rect.height * dotField.dpr);
+        drawDotField(performance.now());
+        canvas.classList.add('ready');
+        startDotField();
+    };
+    if ('ResizeObserver' in window) new ResizeObserver(resize).observe(canvas);
+    window.addEventListener('resize', resize);
+    document.addEventListener('visibilitychange', startDotField);
+    reduceMotion.addEventListener?.('change', startDotField);
+}
+
+/* =========================================================
+   Helpers
+   ========================================================= */
+const $ = (id) => document.getElementById(id);
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[ch]);
+}
+
+function initialOf(name) {
+    const first = Array.from(String(name).trim())[0] || '?';
+    return first.toUpperCase();
+}
+
+function icon(id) {
+    return `<svg class="i"><use href="#i-${id}"/></svg>`;
+}
+
+function replayAnimation(el, className) {
+    if (!el) return;
+    el.classList.remove(className);
+    void el.offsetWidth;
+    el.classList.add(className);
+}
+
+// Shrink a display heading until no single word overflows and it fits in maxLines.
+function fitText(el, max, min, maxLines = 2) {
+    if (!el) return;
+    let size = max;
+    el.style.fontSize = size + 'px';
+    const lineHeight = parseFloat(getComputedStyle(el).lineHeight) / size || 0.9;
+    while (size > min && (el.scrollWidth > el.clientWidth + 1 || el.offsetHeight > size * lineHeight * maxLines + 4)) {
+        size -= 2;
+        el.style.fontSize = size + 'px';
+    }
+}
+
+function lsGet(key) {
+    try { return localStorage.getItem(key); } catch { return null; }
+}
+function lsSet(key, value) {
+    try { localStorage.setItem(key, value); } catch { /* storage unavailable */ }
+}
+function lsRemove(key) {
+    try { localStorage.removeItem(key); } catch { /* storage unavailable */ }
+}
+
+function flash(el, text, type, ms = 3000) {
+    el.textContent = text;
+    el.className = `message ${type}`;
+    clearTimeout(el._t);
+    if (ms) el._t = setTimeout(() => { el.textContent = ''; }, ms);
+}
+
+/* =========================================================
+   State
+   ========================================================= */
+let currentVoteQuestions = [];
+let currentVoteIndex = 0;
+let gameQuestions = [];
+let gamePlayers = [];
+let currentPlayerIndex = 0;
+let playerCardsList = [];
+let playerColors = {}; // player name -> PALETTE index
+
+let hasVotedInGame = false;
+let skipUsedThisTurn = false;
+let chaosActive = false;
+
+// Preserve game state when editing players
+let isEditingPlayers = false;
+let savedGameQuestions = [];
+let savedPlayerIndex = 0;
+
+/* =========================================================
+   Player colours
+   ========================================================= */
+function usedColorIndexes(except) {
+    return new Set(playerCardsList.filter(n => n !== except).map(n => playerColors[n]));
+}
+
+function freeColorIndex(except) {
+    const used = usedColorIndexes(except);
+    const free = PALETTE.findIndex((_, i) => !used.has(i));
+    return free >= 0 ? free : playerCardsList.length % PALETTE.length;
+}
+
+function assignColor(name) {
+    const existing = playerColors[name];
+    if (existing !== undefined && !usedColorIndexes(name).has(existing)) return;
+    playerColors[name] = freeColorIndex(name);
+}
+
+function colorFor(name) {
+    return PALETTE[playerColors[name] ?? 0];
+}
+
+function playerVars(name) {
+    const p = colorFor(name);
+    return `--pc:${p.c};--pc2:${p.c2};--pc-on:${p.on}`;
+}
+
+/* =========================================================
+   Navigation
+   ========================================================= */
+function showScreen(screenId) {
+    document.querySelectorAll('.screen').forEach(screen => {
+        screen.classList.remove('active');
+    });
+    const screen = $(screenId);
+    screen.classList.add('active');
+
+    const themeName = screen.dataset.theme;
+    if (themeName) applyTheme(THEMES[themeName]);
+
+    if (screenId === 'mainMenu') {
+        renderGreeting();
+        startDotField();
+        updateInstallLink();
+        maybeShowInstallHint();
+    } else if (screenId === 'voteQuestionsScreen') {
+        loadVoteQuestions();
+    } else if (screenId === 'seeQuestionsScreen') {
+        loadAllQuestions();
+    } else if (screenId === 'tutorialScreen') {
+        renderTutorialStep(false);
+    } else if (screenId === 'startGameScreen') {
+        if (gamePlayers.length === 0 && !isEditingPlayers) {
+            playerCardsList = [];
+            playerColors = {};
+        }
+        $('gameSetupMessage').textContent = '';
+        renderSetupHeader();
+        renderPlayerCards();
+        if (window.matchMedia('(hover: hover)').matches) {
+            $('playerNameInput').focus();
+        }
+    }
+}
+
+function renderGreeting() {
+    const nickname = lsGet('nickname');
+    const el = $('menuGreeting');
+    el.textContent = nickname ? `Hey ${nickname}` : 'Hey there';
+    fitText(el, window.innerHeight < 700 ? 54 : 64, 34, 2);
+}
+
+/* =========================================================
+   Password + nickname
+   ========================================================= */
+function checkPassword() {
+    const input = $('passwordInput');
+    const error = $('passwordError');
+
+    if (input.value.trim().toLowerCase() === HARDCODED_PASSWORD) {
+        lsSet('authorized', 'true');
+        error.textContent = '';
+        input.value = '';
+        showScreen(lsGet('nickname') ? 'mainMenu' : 'nicknameScreen');
+    } else {
+        error.textContent = 'Nope, that\'s not it. Try again.';
+        input.value = '';
+        input.focus();
+    }
+}
+
+function setNickname() {
+    const input = $('nicknameInput');
+    const error = $('nicknameError');
+
+    if (input.value.trim() !== '') {
+        lsSet('nickname', input.value.trim());
+        error.textContent = '';
+        input.value = '';
+        showScreen('mainMenu');
+    } else {
+        error.textContent = 'Please enter a name.';
+        input.value = '';
+    }
+}
+
+function changeNickname() {
+    $('nicknameInput').value = lsGet('nickname') || '';
+    showScreen('nicknameScreen');
+}
+
+/* =========================================================
+   Add question
+   ========================================================= */
+function renderCategoryChoices() {
+    const wrap = $('categoryChoices');
+    wrap.innerHTML = CATEGORIES.map((cat, i) => {
+        const t = THEMES[cat.theme];
+        return `<label class="choice" style="--chip:${t.c};--chip-on:${t.on}">
+            <input type="radio" name="questionCategory" value="${escapeHtml(cat.value)}" ${i === 0 ? 'checked' : ''}>
+            <span>${escapeHtml(cat.value)}</span>
+        </label>`;
+    }).join('');
+}
+
+async function addQuestion() {
+    const text = $('questionText').value.trim();
+    const scale = $('scaleText').value.trim();
+    const category = document.querySelector('input[name="questionCategory"]:checked')?.value || CATEGORIES[0].value;
+    const message = $('addQuestionMessage');
+    const nickname = lsGet('nickname');
+    const btn = $('addQuestionBtn');
+
+    if (!text) {
+        flash(message, 'Write a question first.', 'error');
+        return;
+    }
+
+    if (!scale) {
+        flash(message, 'Add a scale, or keep the default (1 - 10).', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    try {
+        await addDoc(collection(db, 'questions'), {
+            text: text,
+            category: category,
+            scale: scale,
+            likes: 0,
+            dislikes: 0,
+            createdAt: new Date(),
+            nickname: nickname || '???'
+        });
+
+        $('questionText').value = '';
+        flash(message, 'Saved! It\'s in the deck now.', 'success');
+    } catch (error) {
+        console.error("Error adding question:", error);
+        flash(message, 'Couldn\'t save that. Check your connection.', 'error', 0);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+/* =========================================================
+   Vote questions
+   ========================================================= */
+function categoryChip(category) {
+    const cat = CATEGORIES.find(c => c.value === category);
+    const color = cat ? THEMES[cat.theme].c : 'var(--c)';
+    return `<span class="chip" style="--chip:${color}">${escapeHtml(category || 'Uncategorised')}</span>`;
+}
+
+function votesMeta(q, withAuthor = false) {
+    const by = withAuthor && q.nickname ? `<span class="by">by ${escapeHtml(q.nickname)}</span>` : '';
+    return `<div class="bubble-meta">
+        <span>${icon('up')}${q.likes || 0}</span>
+        <span>${icon('down')}${q.dislikes || 0}</span>
+        ${by}
+    </div>`;
+}
+
+function setVoteControls(enabled) {
+    $('voteActions').querySelectorAll('.vote-action').forEach(b => { b.disabled = !enabled; });
+    $('voteActions').hidden = !enabled;
+}
+
+async function loadVoteQuestions() {
+    const message = $('voteMessage');
+    const bubble = $('voteQuestion');
+    message.textContent = '';
+    $('voteEmpty').hidden = true;
+    $('voteCount').hidden = true;
+    bubble.hidden = false;
+    bubble.className = 'bubble bubble--lg skeleton';
+    bubble.innerHTML = '';
+    setVoteControls(false);
+
+    try {
+        const querySnapshot = await getDocs(collection(db, 'questions'));
+        currentVoteQuestions = [];
+
+        querySnapshot.forEach((d) => {
+            if (!lsGet(`voted_${d.id}`)) {
+                currentVoteQuestions.push({ id: d.id, ...d.data() });
+            }
+        });
+
+        currentVoteQuestions = shuffleArray(currentVoteQuestions);
+        currentVoteIndex = 0;
+        displayCurrentVoteQuestion();
+    } catch (error) {
+        console.error("Error loading questions:", error);
+        bubble.hidden = true;
+        $('voteActions').hidden = false;
+        flash(message, 'Couldn\'t reach the question database.', 'error', 0);
+    }
+}
+
+function displayCurrentVoteQuestion() {
+    const bubble = $('voteQuestion');
+    const remaining = currentVoteQuestions.length - currentVoteIndex;
+
+    if (remaining <= 0) {
+        bubble.hidden = true;
+        $('voteEmpty').hidden = false;
+        $('voteCount').hidden = true;
+        setVoteControls(false);
+        return;
+    }
+
+    const question = currentVoteQuestions[currentVoteIndex];
+    bubble.className = 'bubble bubble--lg';
+    bubble.innerHTML = `
+        ${categoryChip(question.category)}
+        <p class="text">${escapeHtml(question.text)} <span class="scale">${escapeHtml(question.scale)}</span></p>
+        ${votesMeta(question, true)}
+    `;
+    replayAnimation(bubble, 'enter');
+    $('voteCount').textContent = `${remaining} left`;
+    $('voteCount').hidden = false;
+    setVoteControls(true);
+}
+
+let voteBusy = false;
+
+async function vote(voteType) {
+    if (voteBusy || currentVoteIndex >= currentVoteQuestions.length) return;
+    voteBusy = true;
+
+    const question = currentVoteQuestions[currentVoteIndex];
+    const message = $('voteMessage');
+    const bubble = $('voteQuestion');
+
+    // Optimistic: animate away immediately, roll back if the write fails.
+    lsSet(`voted_${question.id}`, 'true');
+    bubble.classList.remove('enter');
+    bubble.classList.add(voteType === 'like' ? 'out-like' : 'out-dislike');
+
+    const write = updateDoc(doc(db, 'questions', question.id), {
+        [voteType === 'like' ? 'likes' : 'dislikes']: increment(1)
+    }).catch(error => {
+        console.error("Error voting:", error);
+        lsRemove(`voted_${question.id}`);
+        flash(message, 'That vote didn\'t go through.', 'error');
+    });
+
+    setTimeout(() => {
+        currentVoteIndex++;
+        displayCurrentVoteQuestion();
+        voteBusy = false;
+    }, 200);
+
+    await write;
+}
+
+/* =========================================================
+   All questions
+   ========================================================= */
+let allQuestionsByCategory = {};
+let activeFilter = 'all';
+
+async function loadAllQuestions() {
+    const questionsList = $('questionsList');
+    questionsList.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+    $('categoryFilter').innerHTML = '';
+    $('questionsCount').hidden = true;
+
+    try {
+        const querySnapshot = await getDocs(collection(db, 'questions'));
+        allQuestionsByCategory = {};
+        let total = 0;
+
+        querySnapshot.forEach((d) => {
+            const data = d.data();
+            (allQuestionsByCategory[data.category] ||= []).push(data);
+            total++;
+        });
+
+        if (total === 0) {
+            questionsList.innerHTML = `<div class="empty">
+                <h2 class="display display--sm">Empty deck</h2>
+                <p>No questions yet. Be the first to add one.</p>
+                <button class="btn btn--outline btn--auto" onclick="showScreen('addQuestionScreen')">${icon('pen')}Add a question</button>
+            </div>`;
+            return;
+        }
+
+        $('questionsCount').textContent = `${total} total`;
+        $('questionsCount').hidden = false;
+        activeFilter = 'all';
+        renderCategoryFilter();
+        renderQuestionsList();
+    } catch (error) {
+        console.error("Error loading questions:", error);
+        questionsList.innerHTML = '<p class="message error">Couldn\'t reach the question database.</p>';
+    }
+}
+
+function renderCategoryFilter() {
+    const present = CATEGORIES.filter(c => allQuestionsByCategory[c.value]?.length);
+    const chips = [{ value: 'all', label: 'All' }, ...present.map(c => ({ value: c.value, label: c.value }))];
+    $('categoryFilter').innerHTML = chips.map(c =>
+        `<button class="filter-chip" data-filter="${escapeHtml(c.value)}" aria-pressed="${c.value === activeFilter}">${escapeHtml(c.label)}</button>`
+    ).join('');
+}
+
+function renderQuestionsList() {
+    const list = CATEGORIES.filter(c => (activeFilter === 'all' || c.value === activeFilter) && allQuestionsByCategory[c.value]?.length);
+    $('questionsList').innerHTML = list.map(cat => {
+        const items = allQuestionsByCategory[cat.value];
+        return `<section class="cat-group">
+            <h2>${escapeHtml(cat.value)} <small>${items.length}</small></h2>
+            <div class="cat-list">
+                ${items.map(q => `<article class="bubble">
+                    <p class="text">${escapeHtml(q.text)} <span class="scale">${escapeHtml(q.scale)}</span></p>
+                    ${votesMeta(q, true)}
+                </article>`).join('')}
+            </div>
+        </section>`;
+    }).join('');
+    $('questionsList').scrollTop = 0;
+}
+
+/* =========================================================
+   Player setup
+   ========================================================= */
+function renderSetupHeader() {
+    $('setupTitle').textContent = isEditingPlayers ? 'Edit players' : 'Who\'s playing?';
+    $('setupSub').textContent = isEditingPlayers
+        ? 'Add or remove people. The question deck stays as it is.'
+        : 'Everyone gets their own colour.';
+    $('startGameBtn').textContent = isEditingPlayers ? 'Back to the game' : 'Start game';
+}
+
+function addPlayer() {
+    const input = $('playerNameInput');
+    const name = input.value.trim();
+    const message = $('gameSetupMessage');
+
+    if (!name) return;
+
+    if (playerCardsList.some(n => n.toLowerCase() === name.toLowerCase())) {
+        flash(message, `${name} is already in.`, 'error', 2500);
+        input.select();
+        return;
+    }
+
+    message.textContent = '';
+    assignColor(name);
+    playerCardsList.push(name);
+    input.value = '';
+    renderPlayerCards();
+    input.focus();
+}
+
+function removePlayer(index) {
+    playerCardsList.splice(index, 1);
+    renderPlayerCards();
+}
+
+function renderPlayerCards() {
+    const container = $('playersList');
+    container.innerHTML = playerCardsList.map((name, index) => `
+        <div class="player-chip" style="${playerVars(name)}">
+            <span class="av">${escapeHtml(initialOf(name))}</span>
+            <span class="name">${escapeHtml(name)}</span>
+            <button class="rm" onclick="removePlayer(${index})" aria-label="Remove ${escapeHtml(name)}">${icon('x')}</button>
+        </div>
+    `).join('');
+
+    $('playersEmpty').hidden = playerCardsList.length > 0;
+    const count = $('playerCount');
+    count.hidden = playerCardsList.length === 0;
+    count.textContent = `${playerCardsList.length} ${playerCardsList.length === 1 ? 'player' : 'players'}`;
+
+    // The + button previews the colour the next player will get.
+    const next = PALETTE[freeColorIndex()];
+    const addBtn = $('addPlayerBtn');
+    addBtn.style.setProperty('--pc', next.c);
+    addBtn.style.setProperty('--pc-on', next.on);
+}
+
+function cancelSetup() {
+    if (isEditingPlayers) {
+        isEditingPlayers = false;
+        playerCardsList = [...gamePlayers];
+        showScreen('gameScreen');
+        displayGameQuestion(false);
+    } else {
+        showScreen('mainMenu');
+    }
+}
+
+function loadCurrentPlayersForEdit() {
+    isEditingPlayers = true;
+    savedGameQuestions = [...gameQuestions];
+    savedPlayerIndex = currentPlayerIndex;
+    playerCardsList = [...gamePlayers];
+    showScreen('startGameScreen');
+}
+
+async function startGame() {
+    const message = $('gameSetupMessage');
+    const btn = $('startGameBtn');
+
+    if (playerCardsList.length === 0) {
+        flash(message, 'Add at least one player.', 'error');
+        return;
+    }
+
+    const previousCurrent = gamePlayers[savedPlayerIndex];
+    gamePlayers = [...playerCardsList];
+
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = 'Shuffling…';
+
+    try {
+        // --- USAGE TRACKING ---
+        const nickname = lsGet('nickname') || 'Anonymous';
+        await addDoc(collection(db, 'usage'), {
+            nickname: nickname,
+            playerCount: gamePlayers.length,
+            playerNames: gamePlayers,
+            createdAt: new Date(),
+            editedPlayers: isEditingPlayers
+        });
+
+        if (isEditingPlayers) {
+            // Keep the question stack, and stay on the same player if they're still in.
+            isEditingPlayers = false;
+            gameQuestions = [...savedGameQuestions];
+            const stillIn = gamePlayers.indexOf(previousCurrent);
+            currentPlayerIndex = stillIn >= 0 ? stillIn : savedPlayerIndex % gamePlayers.length;
+        } else {
+            const querySnapshot = await getDocs(collection(db, 'questions'));
+            gameQuestions = [];
+
+            querySnapshot.forEach((d) => {
+                gameQuestions.push({ id: d.id, ...d.data() });
+            });
+
+            if (gameQuestions.length === 0) {
+                flash(message, 'No questions yet. Add some first!', 'error', 0);
+                return;
+            }
+
+            gamePlayers = shuffleArray(gamePlayers);
+            gameQuestions = randomShuffleQuestions(gameQuestions);
+            // Use weightedShuffleQuestions to prioritise higher rated questions.
+            // gameQuestions = weightedShuffleQuestions(gameQuestions);
+            currentPlayerIndex = 0;
+            hasVotedInGame = false;
+            skipUsedThisTurn = false;
+            chaosActive = false;
+        }
+
+        showScreen('gameScreen');
+        displayGameQuestion();
+    } catch (error) {
+        console.error("Error loading game questions:", error);
+        flash(message, 'Couldn\'t connect to the question database.', 'error', 0);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = label;
+    }
+}
+
+/* =========================================================
+   Game
+   ========================================================= */
+function renderTurnOrder() {
+    const n = gamePlayers.length;
+    const visible = Math.min(n, 5);
+    let html = '';
+    for (let k = 0; k < visible; k++) {
+        const name = gamePlayers[(currentPlayerIndex + k) % n];
+        html += `<span class="av-dot${k === 0 ? ' current' : ''}" style="${playerVars(name)};z-index:${visible - k}">${escapeHtml(initialOf(name))}</span>`;
+    }
+    if (n > visible) html += `<span class="av-dot more">+${n - visible}</span>`;
+    $('turnOrder').innerHTML = html;
+}
+
+function displayGameQuestion(animate = true) {
+    if (gameQuestions.length === 0) {
+        showGameOver();
+        return;
+    }
+
+    const player = gamePlayers[currentPlayerIndex];
+    const question = gameQuestions[0];
+    applyTheme(colorFor(player));
+
+    const nameEl = $('currentPlayer');
+    nameEl.textContent = player;
+    $('gameScreen').classList.toggle('chaos-on', chaosActive);
+    $('heroInitial').textContent = initialOf(player);
+    const nextName = gamePlayers.length > 1 ? gamePlayers[(currentPlayerIndex + 1) % gamePlayers.length] : '';
+    $('nextUp').textContent = nextName ? `Up next: ${nextName}` : '';
+    renderTurnOrder();
+    fitText(nameEl, nameMaxSize(), 30, 2);
+
+    const chip = $('gameCategory');
+    chip.textContent = question.category || 'Question';
+
+    const textEl = $('gameQuestionText');
+    textEl.innerHTML = `${escapeHtml(question.text)} <span class="q-scale">${escapeHtml(question.scale)}</span>`;
+    const len = `${question.text} ${question.scale}`.length;
+    textEl.classList.toggle('is-long', len > 110 && len <= 180);
+    textEl.classList.toggle('is-xlong', len > 180);
+
+    $('gameVoteButtons').hidden = hasVotedInGame;
+    $('gameVotedNote').hidden = !hasVotedInGame;
+
+    const skipBtn = $('skipBtn');
+    skipBtn.disabled = skipUsedThisTurn;
+    $('skipsLeft').textContent = skipUsedThisTurn ? '0 left' : '1 left';
+
+    $('chaosBtn').disabled = chaosActive;
+    $('chaosModifierCard').hidden = !chaosActive;
+
+    if (animate) {
+        replayAnimation($('turnBlock'), 'swap');
+        replayAnimation(textEl, 'swap');
+    }
+}
+
+function nameMaxSize() {
+    const base = window.innerHeight < 700 ? 70 : 84;
+    return chaosActive ? Math.round(base * 0.62) : base;
+}
+
+// Resize the player name and animate from the old size (FLIP), anchored bottom-left.
+function refitPlayerName() {
+    const el = $('currentPlayer');
+    const before = el.getBoundingClientRect();
+    fitText(el, nameMaxSize(), 30, 2);
+    const after = el.getBoundingClientRect();
+    if (!after.height || !el.animate) return;
+    const scale = before.height / after.height;
+    if (Math.abs(scale - 1) < 0.02) return;
+    el.animate(
+        [{ transform: `scale(${scale})` }, { transform: 'none' }],
+        { duration: 450, easing: 'cubic-bezier(.22, 1, .36, 1)' }
+    );
+}
+
+function nextQuestion() {
+    if (gameQuestions.length > 0) {
+        gameQuestions.shift();
+    }
+
+    currentPlayerIndex = (currentPlayerIndex + 1) % gamePlayers.length;
+    hasVotedInGame = false;
+    skipUsedThisTurn = false;
+    chaosActive = false;
+    $('gameQuestion').scrollTop = 0;
+
+    displayGameQuestion();
+}
+
+function skipQuestion() {
+    if (skipUsedThisTurn) return;
+    if (gameQuestions.length > 0) {
+        gameQuestions.shift();
+    }
+
+    hasVotedInGame = false;
+    skipUsedThisTurn = true;
+    chaosActive = false;
+
+    if (gameQuestions.length === 0) {
+        showGameOver();
+        return;
+    }
+    displayGameQuestion(false);
+    replayAnimation($('gameQuestionText'), 'swap');
+}
+
+async function voteInGame(voteType) {
+    const question = gameQuestions[0];
+    if (!question || hasVotedInGame) return;
+
+    hasVotedInGame = true;
+    $('gameVoteButtons').hidden = true;
+    $('gameVotedNote').hidden = false;
+
+    try {
+        await updateDoc(doc(db, 'questions', question.id), {
+            [voteType === 'like' ? 'likes' : 'dislikes']: increment(1)
+        });
+    } catch (error) {
+        console.error("Error voting:", error);
+        if (gameQuestions[0] === question) {
+            hasVotedInGame = false;
+            $('gameVoteButtons').hidden = false;
+            $('gameVotedNote').hidden = true;
+        }
+    }
+}
+
+function showGameOver() {
+    const players = [...gamePlayers];
+    showScreen('gameOverScreen');
+    applyTheme(players.length ? colorFor(players[currentPlayerIndex] ?? players[0]) : BRAND);
+    $('gameOverPlayers').innerHTML = players.map((name, i) =>
+        `<span class="av" style="${playerVars(name)};animation-delay:${120 + i * 60}ms" title="${escapeHtml(name)}">${escapeHtml(initialOf(name))}</span>`
+    ).join('');
+}
+
+function endGame() {
+    gameQuestions = [];
+    gamePlayers = [];
+    playerCardsList = [];
+    playerColors = {};
+    currentPlayerIndex = 0;
+    isEditingPlayers = false;
+    hasVotedInGame = false;
+    skipUsedThisTurn = false;
+    chaosActive = false;
+    showScreen('mainMenu');
+}
+
+function shuffleArray(array) {
+    const newArray = [...array];
+    for (let i = newArray.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+    }
+    return newArray;
+}
+
+function weightedShuffleQuestions(questions) {
+    const questionsWithWeights = questions.map(q => {
+        const likes = q.likes || 0;
+        const dislikes = q.dislikes || 0;
+        const totalVotes = likes + dislikes;
+
+        let weight;
+        if (totalVotes === 0) {
+            weight = 1;
+        } else {
+            const ratio = likes / totalVotes;
+            weight = Math.pow(ratio + 0.1, 2);
+        }
+
+        return { question: q, weight: weight };
+    });
+
+    const weightedList = [];
+    questionsWithWeights.forEach(item => {
+        const count = Math.max(1, Math.round(item.weight * 10));
+        for (let i = 0; i < count; i++) {
+            weightedList.push(item.question);
+        }
+    });
+
+    const shuffled = shuffleArray(weightedList);
+
+    const uniqueQuestions = [];
+    const seenIds = new Set();
+
+    for (const q of shuffled) {
+        if (!seenIds.has(q.id)) {
+            uniqueQuestions.push(q);
+            seenIds.add(q.id);
+        }
+    }
+
+    return uniqueQuestions;
+}
+
+function randomShuffleQuestions(questions) {
+    return shuffleArray(questions);
+}
+
+const CHAOS_MODIFIERS = [
+    "Everyone picks the number for the person on their left",
+    "Everyone picks the number for the person on their right",
+    "Everyone picks the number for the question asker",
+    "All players put their card in sequence from highest to lowest",
+    "Everyone answers for [RandomPlayer]",
+    "Everyone answers for [RandomPlayer]",
+    "[RandomPlayer] answers twice and lies about one answer",
+    "The person on your right can change your answer if they don't agree",
+    "Answer how you think the group would rate you",
+    "First person you assign is worth three sips",
+    "Answer what your parents would answer for you",
+    "Answer what your Ex would answer for you",
+];
+
+function toggleChaosModifier() {
+    if (chaosActive) return;
+    let randomModifier = CHAOS_MODIFIERS[Math.floor(Math.random() * CHAOS_MODIFIERS.length)];
+    randomModifier = randomModifier.replace('[RandomPlayer]', getRandomPlayer());
+
+    $('chaosModifierText').textContent = randomModifier;
+    chaosActive = true;
+    $('chaosBtn').disabled = true;
+    $('gameScreen').classList.add('chaos-on');
+    refitPlayerName();
+    const card = $('chaosModifierCard');
+    card.hidden = false;
+    replayAnimation(card, 'swap');
+    requestAnimationFrame(() => card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+}
+
+function getRandomPlayer() {
+    if (gamePlayers.length === 0) return 'Player';
+
+    const availablePlayers = gamePlayers.filter((_, index) => index !== currentPlayerIndex);
+
+    if (availablePlayers.length === 0) return gamePlayers[currentPlayerIndex];
+
+    return availablePlayers[Math.floor(Math.random() * availablePlayers.length)];
+}
+
+/* =========================================================
+   Feedback
+   ========================================================= */
+async function sendFeedback() {
+    const input = $('feedbackInput');
+    const message = $('feedbackMessage');
+    const feedback = input.value.trim();
+    const nickname = lsGet('nickname') || 'Anonymous';
+    if (!feedback) {
+        flash(message, 'Write something first.', 'error');
+        return;
+    }
+    try {
+        await addDoc(collection(db, 'feedback'), {
+            feedback: feedback,
+            nickname: nickname,
+            createdAt: new Date()
+        });
+        input.value = '';
+        flash(message, 'Sent. Thank you!', 'success');
+    } catch (error) {
+        console.error('Error sending feedback:', error);
+        flash(message, 'Couldn\'t send that. Check your connection.', 'error', 0);
+    }
+}
+
+/* =========================================================
+   Tutorial
+   ========================================================= */
 const tutorialSteps = [
     {
         image: 'assets/tutorial/step1_cards.png',
@@ -23,13 +1054,22 @@ const tutorialSteps = [
 
 let currentTutorialStep = 0;
 
-function renderTutorialStep() {
-    const img = document.getElementById('tutorialImage');
-    const text = document.getElementById('tutorialText');
-    img.src = tutorialSteps[currentTutorialStep].image;
-    text.textContent = tutorialSteps[currentTutorialStep].text;
-    document.getElementById('tutorialBackBtn').disabled = currentTutorialStep === 0;
-    document.getElementById('tutorialForwardBtn').disabled = currentTutorialStep === tutorialSteps.length - 1;
+function renderTutorialStep(animate = true) {
+    const step = tutorialSteps[currentTutorialStep];
+    const last = currentTutorialStep === tutorialSteps.length - 1;
+    $('tutorialImage').src = step.image;
+    $('tutorialImage').alt = `Illustration for step ${currentTutorialStep + 1}`;
+    $('tutorialText').textContent = step.text;
+    $('tutorialStepLabel').textContent = `Step ${currentTutorialStep + 1} of ${tutorialSteps.length}`;
+    $('tutorialBackBtn').disabled = currentTutorialStep === 0;
+    $('tutorialForwardBtn').innerHTML = last ? `Let's play ${icon('arrow')}` : `Next ${icon('arrow')}`;
+    $('tutorialProgress').innerHTML = tutorialSteps.map((_, i) =>
+        `<span class="${i <= currentTutorialStep ? 'on' : ''}"></span>`
+    ).join('');
+    if (animate) {
+        replayAnimation($('tutorialText'), 'tut-swap');
+        replayAnimation($('tutorialImage'), 'tut-swap');
+    }
 }
 
 function tutorialBack() {
@@ -43,736 +1083,143 @@ function tutorialForward() {
     if (currentTutorialStep < tutorialSteps.length - 1) {
         currentTutorialStep++;
         renderTutorialStep();
+    } else {
+        currentTutorialStep = 0;
+        showScreen('startGameScreen');
     }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-    const backBtn = document.getElementById('tutorialBackBtn');
-    const forwardBtn = document.getElementById('tutorialForwardBtn');
-    if (backBtn && forwardBtn) {
-        backBtn.addEventListener('click', tutorialBack);
-        forwardBtn.addEventListener('click', tutorialForward);
-        renderTutorialStep();
-    }
+/* =========================================================
+   Add to Home Screen
+   ========================================================= */
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const forceInstallHint = new URLSearchParams(location.search).has('installhint');
+let deferredInstallPrompt = null;
+let installTimer = null;
+
+function isStandalone() {
+    return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    updateInstallLink();
 });
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, increment, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-const HARDCODED_PASSWORD = "ohlala";
+window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    updateInstallLink();
+});
 
-const firebaseConfig = {
-    apiKey: "AIzaSyAP9HccB7Ri2KXobu5S1p_FJ7L6QeA2GHQ" ,
-  authDomain: "tobygame-df9f1.firebaseapp.com",
-  projectId: "tobygame-df9f1",
-  storageBucket: "tobygame-df9f1.firebasestorage.app",
-  messagingSenderId: "1070543180902",
-  appId: "1:1070543180902:web:611bdb0b28e998fd7189a7",
-  measurementId: "G-SGZFK0GKYT"
-};
-
-let app;
-let db;
-
-try {
-    app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-} catch (error) {
-    console.error("Firebase initialization error:", error);
+function updateInstallLink() {
+    const link = $('installLink');
+    if (!link) return;
+    const canInstall = isIOS || !!deferredInstallPrompt || forceInstallHint;
+    link.hidden = isStandalone() || !canInstall;
+    link.textContent = isIOS || forceInstallHint ? 'Add to Home Screen' : 'Install app';
 }
 
-let currentVoteQuestions = [];
-let currentVoteIndex = 0;
-let gameQuestions = [];
-let gamePlayers = [];
-let currentPlayerIndex = 0;
-let playerCardsList = [];
+function maybeShowInstallHint() {
+    if (isStandalone() || !(isIOS || forceInstallHint)) return;
+    const until = Number(lsGet('installHintUntil')) || 0;
+    if (!forceInstallHint && Date.now() < until) return;
+    if (installTimer) return;
+    installTimer = setTimeout(() => {
+        installTimer = null;
+        if ($('mainMenu').classList.contains('active')) openInstallSheet();
+    }, 1200);
+}
 
-let hasVotedInGame = false;
-
-// Preserve game state when editing players
-let isEditingPlayers = false;
-let savedGameQuestions = [];
-let savedPlayerIndex = 0;
-
-function checkPassword() {
-    const input = document.getElementById('passwordInput');
-    const error = document.getElementById('passwordError');
-    
-    if (input.value === HARDCODED_PASSWORD) {
-        localStorage.setItem('authorized', 'true');
-        const nickname = localStorage.getItem('nickname');
-        if (nickname) {
-            showScreen('mainMenu');
-        } else {
-            showScreen('nicknameScreen');
-        }
-        error.textContent = '';
-        input.value = '';
-    } else {
-        error.textContent = 'Incorrect password. Try again.';
-        input.value = '';
+function showInstallHint() {
+    if (deferredInstallPrompt && !isIOS) {
+        deferredInstallPrompt.prompt();
+        deferredInstallPrompt.userChoice.finally(() => {
+            deferredInstallPrompt = null;
+            updateInstallLink();
+        });
+        return;
     }
+    openInstallSheet();
 }
 
-function setNickname() {
-    const input = document.getElementById('nicknameInput');
-    const error = document.getElementById('nicknameError');
-    
-    if (input.value.trim() !== '') {
-        localStorage.setItem('nickname', input.value.trim());
-        showScreen('mainMenu');
-        error.textContent = '';
-        input.value = '';
-    } else {
-        error.textContent = 'Please enter a nickname.';
-        input.value = '';
-    }
+let lastFocus = null;
+
+function openInstallSheet() {
+    const sheet = $('installSheet');
+    const backdrop = $('installBackdrop');
+    if (!sheet.hidden) return;
+    lastFocus = document.activeElement;
+    sheet.hidden = false;
+    backdrop.hidden = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        sheet.classList.add('open');
+        backdrop.classList.add('open');
+        $('installGotIt').focus({ preventScroll: true });
+    }));
 }
 
-function showScreen(screenId) {
-    document.querySelectorAll('.screen').forEach(screen => {
-        screen.classList.remove('active');
+function closeInstallSheet(snoozeDays) {
+    const sheet = $('installSheet');
+    const backdrop = $('installBackdrop');
+    if (sheet.hidden) return;
+    lsSet('installHintUntil', String(Date.now() + snoozeDays * 864e5));
+    sheet.classList.remove('open');
+    backdrop.classList.remove('open');
+    setTimeout(() => {
+        sheet.hidden = true;
+        backdrop.hidden = true;
+    }, 450);
+    lastFocus?.focus?.({ preventScroll: true });
+}
+
+/* =========================================================
+   Globals for inline handlers
+   ========================================================= */
+Object.assign(window, {
+    checkPassword, setNickname, changeNickname, showScreen, addQuestion, vote,
+    startGame, nextQuestion, skipQuestion, endGame, voteInGame, toggleChaosModifier,
+    getRandomPlayer, addPlayer, removePlayer, loadCurrentPlayersForEdit, cancelSetup,
+    sendFeedback, showInstallHint,
+});
+
+/* =========================================================
+   Boot
+   ========================================================= */
+function boot() {
+    setupDotField();
+    renderCategoryChoices();
+
+    $('tutorialBackBtn').addEventListener('click', tutorialBack);
+    $('tutorialForwardBtn').addEventListener('click', tutorialForward);
+
+    $('categoryFilter').addEventListener('click', (e) => {
+        const chip = e.target.closest('.filter-chip');
+        if (!chip) return;
+        activeFilter = chip.dataset.filter;
+        $('categoryFilter').querySelectorAll('.filter-chip').forEach(c => {
+            c.setAttribute('aria-pressed', String(c === chip));
+        });
+        renderQuestionsList();
     });
-    document.getElementById(screenId).classList.add('active');
-    
-    if (screenId === 'voteQuestionsScreen') {
-        loadVoteQuestions();
-    } else if (screenId === 'seeQuestionsScreen') {
-        loadAllQuestions();
-    } else if (screenId === 'startGameScreen') {
-        if (gamePlayers.length === 0) {
-            playerCardsList = [];
-        }
-        renderPlayerCards();
-        document.getElementById('playerNameInput').focus();
-    }
-}
 
-function loadCurrentPlayersForEdit() {
-    isEditingPlayers = true;
-    savedGameQuestions = [...gameQuestions];
-    savedPlayerIndex = currentPlayerIndex;
-    playerCardsList = [...gamePlayers];
-    showScreen('startGameScreen');
-}
-
-async function addQuestion() {
-    const text = document.getElementById('questionText').value.trim();
-    const scale = document.getElementById('scaleText').value.trim();
-    const category = document.getElementById('questionCategory').value;
-    const message = document.getElementById('addQuestionMessage');
-    const nickname = localStorage.getItem('nickname');
-    
-    if (!text) {
-        message.textContent = 'Please enter a question.';
-        message.className = 'message error';
-        return;
-    }
-
-    if (!scale) {
-        message.textContent = 'Please enter a scale or leave default (1 - 10).';
-        message.className = 'message error';
-        return;
-    }
-    
-    try {
-        await addDoc(collection(db, 'questions'), {
-            text: text,
-            category: category,
-            scale: scale,
-            likes: 0,
-            dislikes: 0,
-            createdAt: new Date(),
-            nickname: nickname || '???'
-        });
-        
-        document.getElementById('questionText').value = '';
-        message.textContent = '✅ Question added successfully!';
-        message.className = 'message success';
-        
-        setTimeout(() => {
-            message.textContent = '';
-        }, 3000);
-    } catch (error) {
-        console.error("Error adding question:", error);
-        message.textContent = '❌ Error adding question. Check Firebase config.';
-        message.className = 'message error';
-    }
-}
-
-async function loadVoteQuestions() {
-    const message = document.getElementById('voteMessage');
-    const voteContent = document.getElementById('voteContent');
-    
-    try {
-        const querySnapshot = await getDocs(collection(db, 'questions'));
-        currentVoteQuestions = [];
-        
-        querySnapshot.forEach((doc) => {
-            const voted = localStorage.getItem(`voted_${doc.id}`);
-            if (!voted) {
-                currentVoteQuestions.push({ id: doc.id, ...doc.data() });
-            }
-        });
-        
-        currentVoteQuestions = shuffleArray(currentVoteQuestions);
-        currentVoteIndex = 0;
-        
-        if (currentVoteQuestions.length === 0) {
-            voteContent.innerHTML = '<p style="text-align: center; padding: 40px; color: #888;">No more questions to vote on!</p>';
-            message.textContent = '';
-        } else {
-            displayCurrentVoteQuestion();
-            message.textContent = '';
-        }
-    } catch (error) {
-        console.error("Error loading questions:", error);
-        message.textContent = 'Error loading questions. Failed to connected to Database';
-        message.className = 'message error';
-    }
-}
-
-function displayCurrentVoteQuestion() {
-    const voteQuestionDiv = document.getElementById('voteQuestion');
-    
-    if (currentVoteIndex >= currentVoteQuestions.length) {
-        document.getElementById('voteContent').innerHTML = '<p style="text-align: center; padding: 40px; color: #888;">No more questions to vote on.</p>';
-        return;
-    }
-    
-    const question = currentVoteQuestions[currentVoteIndex];
-    voteQuestionDiv.innerHTML = `
-        <span class="category">${question.category}</span>
-        <div class="text">${question.text} ${question.scale}</div>
-        <div class="votes">
-            <span>👍 ${question.likes}</span>
-            <span>👎 ${question.dislikes}</span>
-        </div>
-    `;
-}
-
-async function voteInGame(voteType) {
-    const question = gameQuestions[0];
-    const voteButtons = document.getElementById('gameVoteButtons');
-
-    
-
-    try {
-        const questionRef = doc(db, 'questions', question.id);
-
-        if (voteType === 'like') {
-            await updateDoc(questionRef, {
-                likes: increment(1)
-            });
-        } else {
-            await updateDoc(questionRef, {
-                dislikes: increment(1)
-            });
-        }
-        hasVotedInGame = true;
-        voteButtons.style.display = 'none';
-    } catch (error) {
-        console.error("Error voting:", error);
-    }
-    
-}
-
-async function vote(voteType) {
-    if (currentVoteIndex >= currentVoteQuestions.length) {
-        return;
-    }
-    
-    const question = currentVoteQuestions[currentVoteIndex];
-    const message = document.getElementById('voteMessage');
-
-    
-    
-    try {
-        const questionRef = doc(db, 'questions', question.id);
-        
-        if (voteType === 'like') {
-            await updateDoc(questionRef, {
-                likes: increment(1)
-            });
-        } else {
-            await updateDoc(questionRef, {
-                dislikes: increment(1)
-            });
-        }
-        
-        localStorage.setItem(`voted_${question.id}`, 'true');
-        
-        currentVoteIndex++;
-        
-        if (currentVoteIndex >= currentVoteQuestions.length) {
-            document.getElementById('voteContent').innerHTML = '<p style="text-align: center; padding: 40px; color: #27ae60; font-weight: 600;">✅ All done! No more questions to vote on.</p>';
-        } else {
-            displayCurrentVoteQuestion();
-        }
-        
-        message.textContent = '';
-    } catch (error) {
-        console.error("Error voting:", error);
-        message.textContent = '❌ Error submitting vote.';
-        message.className = 'message error';
-    }
-}
-
-async function loadAllQuestions() {
-    const questionsList = document.getElementById('questionsList');
-    
-    try {
-        const querySnapshot = await getDocs(collection(db, 'questions'));
-        const questionsByCategory = {};
-        
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            if (!questionsByCategory[data.category]) {
-                questionsByCategory[data.category] = [];
-            }
-            questionsByCategory[data.category].push(data);
-        });
-        
-        if (Object.keys(questionsByCategory).length === 0) {
-            questionsList.innerHTML = '<p style="text-align: center; padding: 40px; color: #888;">No questions yet. Add some!</p>';
-            return;
-        }
-        
-        let html = '<div class="questions-list-container">';
-        
-        const categories = ["🔥 Spicy","😈 Kinky","🧨 Explosive group questions","✨ Confidence","💕 Love & Dating","🥂 Party","💭 Deep / Emotional","✨ Random"];
-        categories.forEach(category => {
-            if (questionsByCategory[category] && questionsByCategory[category].length > 0) {
-                html += `<div class="category-group">
-                    <h3>${category}</h3>`;
-                
-                questionsByCategory[category].forEach(q => {
-                    html += `<div class="question-card">
-                        <div class="text">${q.text} ${q.scale}</div>
-                        <div class="votes">
-                            <span>👍 ${q.likes}</span>
-                            <span>👎 ${q.dislikes}</span>
-                        </div>
-                    </div>`;
-                });
-                
-                html += '</div>';
-            }
-        });
-        
-        html += '</div>';
-        questionsList.innerHTML = html;
-    } catch (error) {
-        console.error("Error loading questions:", error);
-        questionsList.innerHTML = '<p style="text-align: center; padding: 40px; color: #e74c3c;">❌ Error loading questions. Check Firebase config.</p>';
-    }
-}
-
-function addPlayer() {
-    const input = document.getElementById('playerNameInput');
-    const name = input.value.trim();
-    
-    if (!name) {
-        return;
-    }
-    
-    if (playerCardsList.includes(name)) {
-        alert('Player already added!');
-        return;
-    }
-    
-    playerCardsList.push(name);
-    input.value = '';
-    renderPlayerCards();
-    input.focus();
-}
-
-function removePlayer(index) {
-    playerCardsList.splice(index, 1);
-    renderPlayerCards();
-}
-
-function renderPlayerCards() {
-    const container = document.getElementById('playersList');
-    container.innerHTML = '';
-    
-    playerCardsList.forEach((name, index) => {
-        const card = document.createElement('div');
-        card.className = 'player-card';
-        card.innerHTML = `
-            <span>${name}</span>
-            <button class="remove-player-btn" onclick="removePlayer(${index})">✕</button>
-        `;
-        container.appendChild(card);
+    $('installGotIt').addEventListener('click', () => closeInstallSheet(30));
+    $('installLater').addEventListener('click', () => closeInstallSheet(3));
+    $('installBackdrop').addEventListener('click', () => closeInstallSheet(3));
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeInstallSheet(3);
     });
-}
 
-async function startGame() {
-    const message = document.getElementById('gameSetupMessage');
-    
-    if (playerCardsList.length === 0) {
-        message.textContent = 'Please add at least one player.';
-        message.className = 'message error';
-        return;
-    }
-    
-    gamePlayers = [...playerCardsList];
-    
-    if (gamePlayers.length === 0) {
-        message.textContent = 'Please enter valid player names.';
-        message.className = 'message error';
-        return;
-    }
-    
-    try {
-        // --- USAGE TRACKING START ---
-        if (!isEditingPlayers) {
-            const nickname = localStorage.getItem('nickname') || 'Anonymous';
-            await addDoc(collection(db, 'usage'), {
-                nickname: nickname,
-                playerCount: gamePlayers.length,
-                playerNames: gamePlayers,
-                createdAt: new Date(),
-                editedPlayers: false
-            });
-        } else {
-            const nickname = localStorage.getItem('nickname') || 'Anonymous';
-            await addDoc(collection(db, 'usage'), {
-                nickname: nickname,
-                playerCount: gamePlayers.length,
-                playerNames: gamePlayers,
-                createdAt: new Date(),
-                editedPlayers: true
-            });
-        }
-        // --- USAGE TRACKING END ---
-        // If editing players, preserve the question stack and position
-        if (isEditingPlayers) {
-            isEditingPlayers = false;
-            gameQuestions = [...savedGameQuestions];
-            currentPlayerIndex = savedPlayerIndex;
-        } else {
-            // Starting fresh game - load new questions
-            const querySnapshot = await getDocs(collection(db, 'questions'));
-            gameQuestions = [];
-            
-            querySnapshot.forEach((doc) => {
-                gameQuestions.push({ id: doc.id, ...doc.data() });
-            });
-            
-            if (gameQuestions.length === 0) {
-                message.textContent = 'No questions available. Add some first!';
-                message.className = 'message error';
-                return;
-            }
-            
-            gamePlayers = shuffleArray(gamePlayers);
-            gameQuestions = randomShuffleQuestions(gameQuestions);
-            //use the weightedShuffle if you want to prioritize higher rated questions, or randomShuffle for a pure random order. You can switch between them as needed.
-            //gameQuestions = weightedShuffleQuestions(gameQuestions);
-            currentPlayerIndex = 0;
-        }
-        
-        showScreen('gameScreen');
-        displayGameQuestion();
-    } catch (error) {
-        console.error("Error loading game questions:", error);
-        message.textContent = 'Error loading questions. Couldnt connect to Database';
-        message.className = 'message error';
-    }
-}
-
-function displayGameQuestion() {
-    if (gameQuestions.length === 0) {
-        document.getElementById('gameQuestion').innerHTML = '<p style="color: #888;">No more questions! Game over.</p>';
-        document.getElementById('gameVoteButtons').style.display = 'none';
-        return;
-    }
-    
-    const player = gamePlayers[currentPlayerIndex];
-    const question = gameQuestions[0];
-    
-    document.getElementById('currentPlayer').textContent = player;
-    
-    // Find or create the question content div (but NOT the vote buttons)
-    let questionContent = document.querySelector('#gameQuestion > .question-content');
-    if (!questionContent) {
-        questionContent = document.createElement('div');
-        questionContent.className = 'question-content';
-        // Insert after the vote bubbles
-        document.getElementById('gameQuestion').insertBefore(questionContent, document.getElementById('gameVoteButtons').nextSibling);
-    }
-    
-    questionContent.innerHTML = `
-        <span class="category">${question.category}</span>
-        <div style="margin-top: 15px;">${question.text} ${question.scale}</div>
-    `;
-    
-    const voteButtons = document.getElementById('gameVoteButtons');
-    if (hasVotedInGame) {
-        voteButtons.style.display = 'none';
-    } else {
-        voteButtons.style.display = 'block';
-    }
-}
-
-function nextQuestion() {
-    if (gameQuestions.length > 0) {
-        gameQuestions.shift();
-    }
-    
-    currentPlayerIndex = (currentPlayerIndex + 1) % gamePlayers.length;
-    hasVotedInGame = false;
-
-    const skipBtn = document.querySelector('.skip-btn');
-    skipBtn.style.display = 'block';
-    
-    // Reset chaos modifier
-    const chaosBtn = document.querySelector('.chaos-btn');
-    const chaosCard = document.getElementById('chaosModifierCard');
-    chaosBtn.style.display = 'block';
-    chaosCard.style.display = 'none';
-
-    displayGameQuestion();
-}
-
-function skipQuestion() {
-    if (gameQuestions.length > 0) {
-        gameQuestions.shift();
-    }
-    
-    hasVotedInGame = false;
-    document.querySelector('.skip-btn').style.display = 'none';
-    
-    // Reset chaos modifier
-    const chaosBtn = document.querySelector('.chaos-btn');
-    const chaosCard = document.getElementById('chaosModifierCard');
-    chaosBtn.style.display = 'block';
-    chaosCard.style.display = 'none';
-    
-    displayGameQuestion();
-}
-
-function endGame() {
-    gameQuestions = [];
-    gamePlayers = [];
-    currentPlayerIndex = 0;
-    //document.getElementById('playerNames').value = '';
-    showScreen('mainMenu');
-}
-
-function shuffleArray(array) {
-    const newArray = [...array];
-    for (let i = newArray.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-    }
-    return newArray;
-}
-
-function weightedShuffleQuestions(questions) {
-    const questionsWithWeights = questions.map(q => {
-        const likes = q.likes || 0;
-        const dislikes = q.dislikes || 0;
-        const totalVotes = likes + dislikes;
-        
-        let weight;
-        if (totalVotes === 0) {
-            weight = 1;
-        } else {
-            const ratio = likes / totalVotes;
-            weight = Math.pow(ratio + 0.1, 2);
-        }
-        
-        return { question: q, weight: weight };
-    });
-    
-    const weightedList = [];
-    questionsWithWeights.forEach(item => {
-        const count = Math.max(1, Math.round(item.weight * 10));
-        for (let i = 0; i < count; i++) {
-            weightedList.push(item.question);
-        }
-    });
-    
-    const shuffled = shuffleArray(weightedList);
-    
-    const uniqueQuestions = [];
-    const seenIds = new Set();
-    
-    for (const q of shuffled) {
-        if (!seenIds.has(q.id)) {
-            uniqueQuestions.push(q);
-            seenIds.add(q.id);
-        }
-    }
-    
-    return uniqueQuestions;
-}
-
-function randomShuffleQuestions(questions) {
-    return shuffleArray(questions);
-}
-
-async function gameVote(voteType) {
-    if (gameQuestions.length === 0) {
-        return;
-    }
-    
-    const question = gameQuestions[0];
-    const message = document.getElementById('gameVoteMessage');
-    
-    const hasVoted = localStorage.getItem(`voted_${question.id}`);
-    if (hasVoted) {
-        message.textContent = 'You already voted on this question!';
-        message.className = 'message error';
-        setTimeout(() => {
-            message.textContent = '';
-        }, 2000);
-        return;
-    }
-    
-    try {
-        const questionRef = doc(db, 'questions', question.id);
-        
-        if (voteType === 'like') {
-            await updateDoc(questionRef, {
-                likes: increment(1)
-            });
-            question.likes = (question.likes || 0) + 1;
-        } else {
-            await updateDoc(questionRef, {
-                dislikes: increment(1)
-            });
-            question.dislikes = (question.dislikes || 0) + 1;
-        }
-        
-        localStorage.setItem(`voted_${question.id}`, 'true');
-        
-        message.textContent = '✅ Vote recorded!';
-        message.className = 'message success';
-        
-        document.getElementById('gameVoteButtons').style.display = 'none';
-        
-        setTimeout(() => {
-            message.textContent = '';
-        }, 2000);
-    } catch (error) {
-        console.error("Error voting:", error);
-        message.textContent = '❌ Error submitting vote.';
-        message.className = 'message error';
-    }
-}
-
-const CHAOS_MODIFIERS = [
-    "Everyone picks the number for the person on their left",
-    "Everyone picks the number for the person on their right",
-    "Everyone picks the number for the question asker",
-    "All players put their card in sequence from highest to lowest",
-    "Everyone answers for [RandomPlayer]",
-    "Everyone answers for [RandomPlayer]",
-    "[RandomPlayer] answers twice and lies about one answer",
-    "The person on your right can change your answer if they don't agree",
-    "Answer how you think the group would rate you",
-    "First person you assign is worth three sips",
-    "Answer what your parents would answer for you",
-    "Answer what your Ex would answer for you",
-];
-
-function toggleChaosModifier() {
-    const card = document.getElementById('chaosModifierCard');
-    const btn = event.target.closest('.chaos-btn');
-    const text = document.getElementById('chaosModifierText');
-    
-    // Generate modifier with random player names
-    let randomModifier = CHAOS_MODIFIERS[Math.floor(Math.random() * CHAOS_MODIFIERS.length)];
-    
-    // Replace placeholder text with actual random player
-    randomModifier = randomModifier.replace('[RandomPlayer]', getRandomPlayer());
-    
-    text.textContent = randomModifier;
-    btn.style.display = 'none';
-    card.style.display = 'block';
-}
-
-function getRandomPlayer() {
-    if (gamePlayers.length === 0) return 'Player';
-    
-    const availablePlayers = gamePlayers.filter((_, index) => index !== currentPlayerIndex);
-    
-    if (availablePlayers.length === 0) return gamePlayers[currentPlayerIndex];
-    
-    return availablePlayers[Math.floor(Math.random() * availablePlayers.length)];
-}
-
-window.checkPassword = checkPassword;
-window.setNickname = setNickname;
-window.showScreen = showScreen;
-window.addQuestion = addQuestion;
-window.vote = vote;
-window.gameVote = gameVote;
-window.startGame = startGame;
-window.nextQuestion = nextQuestion;
-window.skipQuestion = skipQuestion;
-window.endGame = endGame;
-window.voteInGame = voteInGame;
-window.toggleChaosModifier = toggleChaosModifier;
-window.getRandomPlayer = getRandomPlayer;
-window.addPlayer = addPlayer;
-window.removePlayer = removePlayer;
-window.loadCurrentPlayersForEdit = loadCurrentPlayersForEdit;
-
-// Feedback functionality
-async function sendFeedback() {
-    const input = document.getElementById('feedbackInput');
-    const message = document.getElementById('feedbackMessage');
-    const feedback = input.value.trim();
-    const nickname = localStorage.getItem('nickname') || 'Anonymous';
-    if (!feedback) {
-        message.textContent = 'Please enter your feedback.';
-        message.className = 'message error';
-        return;
-    }
-    try {
-        await addDoc(collection(db, 'feedback'), {
-            feedback: feedback,
-            nickname: nickname,
-            createdAt: new Date()
-        });
-        input.value = '';
-        message.textContent = '✅ Thank you for your feedback!';
-        message.className = 'message success';
-        setTimeout(() => { message.textContent = ''; }, 3000);
-    } catch (error) {
-        console.error('Error sending feedback:', error);
-        message.textContent = '❌ Error sending feedback.';
-        message.className = 'message error';
-    }
-}
-
-window.sendFeedback = sendFeedback;
-
-window.addEventListener('DOMContentLoaded', () => {
-    const authorized = localStorage.getItem('authorized');
-    const nickname = localStorage.getItem('nickname');
-    if (authorized === 'true') {
-        if (nickname) {
-            showScreen('mainMenu');
-        } else {
-            showScreen('nicknameScreen');
-        }
-        
+    if (lsGet('authorized') === 'true') {
+        showScreen(lsGet('nickname') ? 'mainMenu' : 'nicknameScreen');
     } else {
         showScreen('passwordScreen');
     }
-    
-    // Add Enter key support for player input
-    const playerInput = document.getElementById('playerNameInput');
-    if (playerInput) {
-        playerInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                addPlayer();
-            }
-        });
-    }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+} else {
+    boot();
+}

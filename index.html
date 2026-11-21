@@ -2,165 +2,314 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Tobygame</title>
-    <link rel="icon" type="image/png" href="assets/icon.png">
+    <meta name="description" content="The party game where you rate it, hide it and guess who said it.">
+
+    <!-- Home screen / PWA -->
+    <meta name="theme-color" content="#1E4FFF">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Tobygame">
+    <meta name="format-detection" content="telephone=no">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/png" href="assets/favicon-64.png">
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&display=swap">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <div id="passwordScreen" class="screen active">
-            <div class="card">
-                <h1>🔐 Enter Password</h1>
-                <input type="password" id="passwordInput" placeholder="Enter password" autocomplete="off">
-                <button onclick="checkPassword()">Submit</button>
-                <p id="passwordError" class="error"></p>
-            </div>
-        </div>
+    <!-- Icon sprite -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></symbol>
+        <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 5l7 7-7 7"/></symbol>
+        <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M11 19l-7-7 7-7"/></symbol>
+        <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+        <symbol id="i-up" viewBox="0 0 24 24"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></symbol>
+        <symbol id="i-down" viewBox="0 0 24 24"><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/></symbol>
+        <symbol id="i-skip" viewBox="0 0 24 24"><path d="M5 4l10 8-10 8z"/><path d="M19 5v14"/></symbol>
+        <symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+        <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.38 3.62a2.12 2.12 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.86.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.86z"/></symbol>
+        <symbol id="i-heart" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
+        <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+        <symbol id="i-book" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol>
+        <symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="m16 6-4-4-4 4"/><path d="M12 2v13"/></symbol>
+        <symbol id="i-addsq" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="4"/><path d="M8 12h8M12 8v8"/></symbol>
+        <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    </svg>
 
-        <div id="nicknameScreen" class="screen active">
-            <div class="card">
-                <h1>👤 Enter your Name</h1>
-                <input type="text" id="nicknameInput" placeholder="Enter your name" autocomplete="off">
-                <button onclick="setNickname()">Submit</button>
-                <p id="nicknameError" class="error"></p>
-            </div>
-        </div>
+    <div class="app" id="app">
 
-        <div id="mainMenu" class="screen">
-            <div class="card">
-                <img src="assets/logo.png" alt="Tobygame Logo" class="logo">
-                <div class="menu-buttons">
-                    <button id="startbutton" onclick="showScreen('startGameScreen')">Start Game</button>
-                    <button onclick="showScreen('addQuestionScreen')">✒️ Add Question</button>
-                    <button onclick="showScreen('voteQuestionsScreen')">👍 Vote Questions</button>
-                    <button onclick="showScreen('seeQuestionsScreen')">📋 See Questions</button>
-                    <button onclick="showScreen('feedbackScreen')">💡 Feedback / Suggestions</button>
-                    <button onclick="showScreen('tutorialScreen')">📖 Tutorial</button>
+        <!-- ============ Password ============ -->
+        <section id="passwordScreen" class="screen screen--split" data-theme="brand">
+            <div class="hero field-bg">
+                <img src="assets/mark-white.png" class="hero-mark" alt="Tobygame">
+            </div>
+            <div class="sheet">
+                <h1 class="display">Psst.</h1>
+                <p class="lede">Tobygame is invite-only. What's the secret word?</p>
+                <form class="stack" onsubmit="event.preventDefault(); checkPassword();">
+                    <input type="password" id="passwordInput" class="field" placeholder="Password" autocomplete="off" aria-label="Password" enterkeyhint="go">
+                    <button type="submit" class="btn btn--primary">Let me in</button>
+                </form>
+                <p id="passwordError" class="error" role="alert"></p>
+            </div>
+        </section>
+
+        <!-- ============ Nickname ============ -->
+        <section id="nicknameScreen" class="screen screen--split" data-theme="brand">
+            <div class="hero field-bg">
+                <img src="assets/mark-white.png" class="hero-mark" alt="Tobygame">
+            </div>
+            <div class="sheet">
+                <h1 class="display">Who's this?</h1>
+                <p class="lede">Your name shows up on every question you add.</p>
+                <form class="stack" onsubmit="event.preventDefault(); setNickname();">
+                    <input type="text" id="nicknameInput" class="field" placeholder="Your name" autocomplete="nickname" aria-label="Your name" maxlength="24" enterkeyhint="done">
+                    <button type="submit" class="btn btn--primary">Continue</button>
+                </form>
+                <p id="nicknameError" class="error" role="alert"></p>
+            </div>
+        </section>
+
+        <!-- ============ Main menu ============ -->
+        <section id="mainMenu" class="screen screen--split" data-theme="brand">
+            <div class="hero field-bg">
+                <canvas class="dot-field" id="dotField" aria-hidden="true"></canvas>
+                <img src="assets/logo-white.png" class="hero-logo" alt="Tobygame">
+            </div>
+            <div class="sheet">
+                <h1 class="display" id="menuGreeting">Hey</h1>
+                <p class="lede">Rate it, hide it, guess who said it.</p>
+                <button id="startbutton" class="btn btn--primary btn--lg" onclick="showScreen('startGameScreen')">
+                    Start game <svg class="i"><use href="#i-arrow"/></svg>
+                </button>
+                <div class="menu-grid">
+                    <button class="btn btn--outline" onclick="showScreen('addQuestionScreen')"><svg class="i"><use href="#i-pen"/></svg>Add question</button>
+                    <button class="btn btn--outline" onclick="showScreen('voteQuestionsScreen')"><svg class="i"><use href="#i-heart"/></svg>Rate</button>
+                    <button class="btn btn--outline" onclick="showScreen('seeQuestionsScreen')"><svg class="i"><use href="#i-list"/></svg>All questions</button>
+                    <button class="btn btn--outline" onclick="showScreen('tutorialScreen')"><svg class="i"><use href="#i-book"/></svg>How to play</button>
+                </div>
+                <nav class="menu-links" aria-label="More">
+                    <button class="link" onclick="showScreen('feedbackScreen')">Feedback</button>
+                    <button class="link" onclick="changeNickname()">Change name</button>
+                    <button class="link" id="installLink" hidden onclick="showInstallHint()">Add to Home Screen</button>
+                </nav>
+            </div>
+        </section>
+
+        <!-- ============ Add question ============ -->
+        <section id="addQuestionScreen" class="screen screen--page" data-theme="tangerine">
+            <header class="page-head field-bg">
+                <div class="topbar">
+                    <button class="icon-btn" onclick="showScreen('mainMenu')" aria-label="Back to menu"><svg class="i"><use href="#i-x"/></svg></button>
+                </div>
+                <h1 class="display display--md">New question</h1>
+                <p class="head-sub">Write something the group will argue about.</p>
+            </header>
+            <div class="page-body">
+                <label class="label" for="questionText">Question</label>
+                <textarea id="questionText" class="field" rows="4" placeholder="How likely is it that you'd text your ex tonight?"></textarea>
+                <label class="label" for="scaleText">Answer scale</label>
+                <input type="text" id="scaleText" class="field" value="(1 - 10)">
+                <span class="label" id="categoryLabel">Category</span>
+                <div class="choice-group" id="categoryChoices" role="radiogroup" aria-labelledby="categoryLabel"></div>
+            </div>
+            <footer class="page-foot">
+                <p id="addQuestionMessage" class="message" role="status"></p>
+                <button class="btn btn--primary" id="addQuestionBtn" onclick="addQuestion()">Save question</button>
+            </footer>
+        </section>
+
+        <!-- ============ Vote questions ============ -->
+        <section id="voteQuestionsScreen" class="screen screen--page" data-theme="electric">
+            <header class="page-head field-bg">
+                <div class="topbar">
+                    <button class="icon-btn" onclick="showScreen('mainMenu')" aria-label="Back to menu"><svg class="i"><use href="#i-x"/></svg></button>
+                    <span class="count-pill" id="voteCount" hidden></span>
+                </div>
+                <h1 class="display display--md">Rate questions</h1>
+                <p class="head-sub">Thumbs up the bangers. Thumbs down the duds.</p>
+            </header>
+            <div class="page-body page-body--center" id="voteContent">
+                <div id="voteQuestion" class="bubble bubble--lg"></div>
+                <div id="voteEmpty" class="empty" hidden>
+                    <h2 class="display display--sm">All caught up</h2>
+                    <p>You've rated every question. Got a better one?</p>
+                    <button class="btn btn--outline btn--auto" onclick="showScreen('addQuestionScreen')"><svg class="i"><use href="#i-pen"/></svg>Add a question</button>
                 </div>
             </div>
-        </div>
+            <footer class="page-foot" id="voteActions">
+                <p id="voteMessage" class="message" role="status"></p>
+                <div class="vote-actions">
+                    <button class="vote-action" onclick="vote('dislike')">
+                        <span class="round-btn round-btn--light"><svg class="i"><use href="#i-down"/></svg></span>Nope
+                    </button>
+                    <button class="vote-action" onclick="vote('like')">
+                        <span class="round-btn"><svg class="i"><use href="#i-up"/></svg></span>Love it
+                    </button>
+                </div>
+            </footer>
+        </section>
 
-        <div id="addQuestionScreen" class="screen">
-            <div class="card">
-                <h2>➕ Add Question</h2>
-                <textarea id="questionText" placeholder="Enter your question..." rows="4"></textarea>
-                <textarea id="scaleText" rows="1">(1 - 10)</textarea>"
-                <select id="questionCategory">
-                    <option value="🔥 Spicy">🔥 Spicy</option>
-                    <option value="😈 Kinky">😈 Kinky</option>
-                    <option value="🧨 Explosive group questions">🧨 Explosive group questions</option>
-                    <option value="✨ Confidence">✨ Confidence</option>
-                    <option value="💕 Love & Dating">💕 Love & Dating</option>
-                    <option value="🥂 Party">🥂 Party</option>
-                    <option value="💭 Deep / Emotional">💭 Deep / Emotional</option>
-                    <option value="✨ Random">✨ Random</option>
-                </select>
-                <button onclick="addQuestion()">Save Question</button>
-                <button class="secondary" onclick="showScreen('mainMenu')">Back</button>
-                <p id="addQuestionMessage" class="message"></p>
+        <!-- ============ All questions ============ -->
+        <section id="seeQuestionsScreen" class="screen screen--page" data-theme="grape">
+            <header class="page-head field-bg">
+                <div class="topbar">
+                    <button class="icon-btn" onclick="showScreen('mainMenu')" aria-label="Back to menu"><svg class="i"><use href="#i-x"/></svg></button>
+                    <span class="count-pill" id="questionsCount" hidden></span>
+                </div>
+                <h1 class="display display--md">All questions</h1>
+            </header>
+            <div class="filter-row" id="categoryFilter" role="toolbar" aria-label="Filter by category"></div>
+            <div class="page-body" id="questionsList"></div>
+        </section>
+
+        <!-- ============ Feedback ============ -->
+        <section id="feedbackScreen" class="screen screen--page" data-theme="lagoon">
+            <header class="page-head field-bg">
+                <div class="topbar">
+                    <button class="icon-btn" onclick="showScreen('mainMenu')" aria-label="Back to menu"><svg class="i"><use href="#i-x"/></svg></button>
+                </div>
+                <h1 class="display display--md">Feedback</h1>
+                <p class="head-sub">Ideas, bugs, wild suggestions. Toby reads all of it.</p>
+            </header>
+            <div class="page-body">
+                <label class="label" for="feedbackInput">Your message</label>
+                <textarea id="feedbackInput" class="field" rows="8" placeholder="It would be fun if…"></textarea>
             </div>
-        </div>
+            <footer class="page-foot">
+                <p id="feedbackMessage" class="message" role="status"></p>
+                <button class="btn btn--primary" onclick="sendFeedback()">Send</button>
+            </footer>
+        </section>
 
-        <div id="voteQuestionsScreen" class="screen">
-            <div class="card">
-                <h2>👍 Vote Questions</h2>
-                <div id="voteContent">
-                    <div id="voteQuestion" class="question-card"></div>
-                    <div class="vote-buttons">
-                        <button onclick="vote('like')" class="like-btn">👍 Like</button>
-                        <button onclick="vote('dislike')" class="dislike-btn">👎 Dislike</button>
+        <!-- ============ Tutorial ============ -->
+        <section id="tutorialScreen" class="screen screen--page" data-theme="bubblegum">
+            <header class="page-head field-bg">
+                <div class="topbar">
+                    <button class="icon-btn" onclick="showScreen('mainMenu')" aria-label="Back to menu"><svg class="i"><use href="#i-x"/></svg></button>
+                    <div class="tut-progress" id="tutorialProgress" aria-hidden="true"></div>
+                    <span class="topbar-spacer"></span>
+                </div>
+                <h1 class="display display--md">How to play</h1>
+                <p class="head-sub" id="tutorialStepLabel">Step 1 of 5</p>
+            </header>
+            <div class="page-body">
+                <figure class="tut-figure">
+                    <img id="tutorialImage" src="assets/tutorial/step1_cards.png" alt="" width="1408" height="768">
+                </figure>
+                <p id="tutorialText" class="tut-text"></p>
+            </div>
+            <footer class="page-foot">
+                <div class="foot-row foot-row--wide">
+                    <button class="btn btn--outline" id="tutorialBackBtn"><svg class="i"><use href="#i-back"/></svg>Back</button>
+                    <button class="btn btn--primary" id="tutorialForwardBtn">Next</button>
+                </div>
+            </footer>
+        </section>
+
+        <!-- ============ Player setup ============ -->
+        <section id="startGameScreen" class="screen screen--page" data-theme="brand">
+            <header class="page-head field-bg">
+                <div class="topbar">
+                    <button class="icon-btn" onclick="cancelSetup()" aria-label="Back"><svg class="i"><use href="#i-x"/></svg></button>
+                    <span class="count-pill" id="playerCount" hidden></span>
+                </div>
+                <h1 class="display display--md" id="setupTitle">Who's playing?</h1>
+                <p class="head-sub" id="setupSub">Everyone gets their own colour.</p>
+            </header>
+            <div class="page-body">
+                <form class="add-row" onsubmit="event.preventDefault(); addPlayer();">
+                    <input type="text" id="playerNameInput" class="field" placeholder="Player name" autocomplete="off" autocapitalize="words" maxlength="20" enterkeyhint="done" aria-label="Player name">
+                    <button type="submit" id="addPlayerBtn" class="add-btn" aria-label="Add player"><svg class="i"><use href="#i-plus"/></svg></button>
+                </form>
+                <div id="playersList" class="player-chips" aria-live="polite"></div>
+                <p class="empty-hint" id="playersEmpty">Add everyone who's in. Three or more is the sweet spot.</p>
+            </div>
+            <footer class="page-foot">
+                <p id="gameSetupMessage" class="message" role="status"></p>
+                <button class="btn btn--primary" id="startGameBtn" onclick="startGame()">Start game</button>
+            </footer>
+        </section>
+
+        <!-- ============ Game ============ -->
+        <section id="gameScreen" class="screen screen--game">
+            <header class="game-hero field-bg">
+                <span class="hero-initial" id="heroInitial" aria-hidden="true"></span>
+                <div class="topbar">
+                    <button class="icon-btn" onclick="endGame()" aria-label="End game"><svg class="i"><use href="#i-x"/></svg></button>
+                    <div class="turn-order" id="turnOrder" aria-hidden="true"></div>
+                    <button class="icon-btn" onclick="loadCurrentPlayersForEdit()" aria-label="Edit players"><svg class="i"><use href="#i-users"/></svg></button>
+                </div>
+                <div class="turn" id="turnBlock">
+                    <p class="turn-label">Your turn</p>
+                    <h1 id="currentPlayer" class="display player-name"></h1>
+                    <p class="next-up" id="nextUp"></p>
+                </div>
+            </header>
+            <div class="game-body" id="gameQuestion">
+                <div class="q-meta">
+                    <span class="chip" id="gameCategory"></span>
+                    <div class="game-vote" id="gameVoteButtons">
+                        <button class="mini-btn" onclick="voteInGame('dislike')" aria-label="Dislike this question"><svg class="i"><use href="#i-down"/></svg></button>
+                        <button class="mini-btn" onclick="voteInGame('like')" aria-label="Like this question"><svg class="i"><use href="#i-up"/></svg></button>
                     </div>
+                    <span class="voted-note" id="gameVotedNote" hidden>Thanks for rating</span>
                 </div>
-                <button class="secondary" onclick="showScreen('mainMenu')">Back to Menu</button>
-                <p id="voteMessage" class="message"></p>
+                <p class="q-text" id="gameQuestionText"></p>
+                <div id="chaosModifierCard" class="chaos-card" hidden>
+                    <span class="chaos-tag"><svg class="i"><use href="#i-flame"/></svg>Chaos mode</span>
+                    <p id="chaosModifierText"></p>
+                </div>
             </div>
-        </div>
+            <footer class="game-foot">
+                <div class="foot-row">
+                    <button class="btn btn--outline skip-btn" id="skipBtn" onclick="skipQuestion()"><svg class="i"><use href="#i-skip"/></svg>Skip <span class="btn-note" id="skipsLeft">1 left</span></button>
+                    <button class="btn btn--outline chaos-btn" id="chaosBtn" onclick="toggleChaosModifier()"><svg class="i"><use href="#i-flame"/></svg>Chaos</button>
+                </div>
+                <button class="btn btn--primary btn--lg next-btn-game" onclick="nextQuestion()">Next player <svg class="i"><use href="#i-arrow"/></svg></button>
+            </footer>
+        </section>
 
-        <div id="seeQuestionsScreen" class="screen">
-            <div class="card">
-                <h2>📋 All Questions</h2>
-                <div id="questionsList"></div>
-                    <button class="secondary" onclick="showScreen('mainMenu')">Back</button>
+        <!-- ============ Game over ============ -->
+        <section id="gameOverScreen" class="screen screen--full field-bg">
+            <div class="full-inner">
+                <h1 class="display display--xl">That's a wrap</h1>
+                <p class="full-sub">You played through every single question. Time to write some new ones.</p>
+                <div class="avatar-row" id="gameOverPlayers"></div>
             </div>
-        </div>
+            <div class="full-foot">
+                <button class="btn btn--inverse" onclick="endGame()">Back to menu</button>
+            </div>
+        </section>
 
-            <div id="feedbackScreen" class="screen">
-                <div class="card">
-                    <h2 style="text-align:center;">Feedback / Suggestions</h2>
-                    <textarea id="feedbackInput" rows="8" style="width:90%;margin:20px auto;display:block;font-size:1.1em;padding:10px;resize:vertical;max-width:600px;min-height:120px;"></textarea>
-                    <div style="text-align:center;margin:10px 0;">
-                        <button onclick="sendFeedback()" style="padding:10px 30px;font-size:1.1em;">Send</button>
-                        <button onclick="showScreen('mainMenu')" style="padding:10px 30px;font-size:1.1em;">Back</button>
-                    </div>
-                    <div id="feedbackMessage" style="text-align:center;margin-top:10px;"></div>
+        <!-- ============ Add-to-Home-Screen sheet ============ -->
+        <div class="sheet-backdrop" id="installBackdrop" hidden></div>
+        <div class="install-sheet" id="installSheet" role="dialog" aria-modal="true" aria-labelledby="installTitle" hidden>
+            <div class="grabber" aria-hidden="true"></div>
+            <div class="install-head">
+                <img src="assets/apple-touch-icon.png" class="install-icon" alt="" width="60" height="60">
+                <div>
+                    <h2 id="installTitle">Put Tobygame on your Home Screen</h2>
+                    <p>Opens full screen like a real app. One tap to the next round.</p>
                 </div>
             </div>
-
-        <div id="startGameScreen" class="screen">
-            <div class="card">
-                <h2>🎲 Start Game</h2>
-                <p>Add players:</p>
-                <div id="playersList" class="players-cards-container"></div>
-                <div class="player-input-wrapper">
-                    <input type="text" id="playerNameInput" placeholder="Enter player name..." autocomplete="off">
-                    <button id="addPlayerBtn" class="add-player-btn" onclick="addPlayer()">+</button>
-                </div>
-                <button onclick="startGame()">Start Game</button>
-                <button class="secondary" onclick="showScreen('mainMenu')">Back</button>
-                <p id="gameSetupMessage" class="message"></p>
-            </div>
-        </div>
-
-        <div id="gameScreen" class="screen">
-            <div class="game-top-bar-container">
-                <div class="game-top-bar">
-                    <button class="top-bar-btn" onclick="loadCurrentPlayersForEdit()">✏️ Edit Players</button>
-                    <button class="top-bar-btn" onclick="endGame()">❌ End Game</button>
-                </div>
-            </div>
-            <div class="card game-card">
-                <div class="game-header">
-                    <h3>Current Player:</h3>
-                    <h1 id="currentPlayer" class="playername"></h1>
-                </div>
-                <div class="question-card large" id="gameQuestion">
-                    <div class="question-content"></div>
-                    <div class="game-vote-bubbles" id="gameVoteButtons">
-                        <button onclick="voteInGame('like')" class="vote-bubble like-bubble" title="Like">👍</button>
-                        <button onclick="voteInGame('dislike')" class="vote-bubble dislike-bubble" title="Dislike">👎</button>
-                    </div>
-                </div>
-                <button class="skip-btn full-width" onclick="skipQuestion()">Skip Question <span id="skipsLeft">(1 left)</span></button>
-                <button onclick="nextQuestion()" class="next-btn-game">Next Player</button>
-                <button onclick="toggleChaosModifier()" class="chaos-btn">🔥 Chaos Mode</button>
-                <div id="chaosModifierCard" class="chaos-modifier-card" style="display: none;">
-                    <div class="chaos-modifier-content">
-                        <p id="chaosModifierText"></p>
-                    </div>
-                </div>
-            </div>
+            <ol class="install-steps">
+                <li><span class="step-n">1</span><span>Tap <b>Share</b> <span class="kbd"><svg class="i"><use href="#i-share"/></svg></span> in Safari. On iOS 26, it's behind <span class="kbd"><svg class="i"><use href="#i-dots"/></svg></span></span></li>
+                <li><span class="step-n">2</span><span>Scroll down, pick <b>Add to Home Screen</b> <span class="kbd"><svg class="i"><use href="#i-addsq"/></svg></span></span></li>
+                <li><span class="step-n">3</span><span>Tap <b>Add</b>. That's it.</span></li>
+            </ol>
+            <button class="btn btn--primary" id="installGotIt">Got it</button>
+            <button class="btn btn--ghost" id="installLater">Maybe later</button>
         </div>
     </div>
 
     <script type="module" src="app.js"></script>
-</div>
-
-    <div id="tutorialScreen" class="screen">
-        <div class="card tutorial-card">
-            <h2>📖 Tutorial</h2>
-            <div class="tutorial-image-container">
-                <img id="tutorialImage" src="assets/tutorial/step1.png" alt="Tutorial Step" style="max-width:100%;height:auto;">
-            </div>
-            <div class="tutorial-text-container">
-                <p id="tutorialText">Welcome to the tutorial! Click forward to see the next step.</p>
-            </div>
-            <div class="tutorial-nav-buttons">
-                <button id="tutorialBackBtn">Back</button>
-                <button id="tutorialForwardBtn">Forward</button>
-            </div>
-            <button class="secondary" onclick="showScreen('mainMenu')">Back to Menu</button>
-        </div>
-    </div>
 </body>
 </html>
