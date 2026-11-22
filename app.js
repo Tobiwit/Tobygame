@@ -1327,7 +1327,7 @@ async function loadAdmin() {
             getDocs(query(collection(db, 'usage'), orderBy('createdAt', 'desc'), limit(300))),
             getDocs(query(collection(db, 'feedback'), orderBy('createdAt', 'desc'), limit(100))),
         ]);
-        adminData.games = games.docs.map(d => d.data()).filter(g => !g.editedPlayers);
+        adminData.games = collapseRestarts(games.docs.map(d => d.data()).filter(g => !g.editedPlayers));
         adminData.feedback = feedback.docs.map(d => d.data());
         renderAdminStats();
         renderAdminList();
@@ -1337,6 +1337,26 @@ async function loadAdmin() {
             ? `This account isn't the admin in firestore.rules. Its user ID is <code>${escapeHtml(currentUser?.uid || '')}</code>.`
             : 'Couldn\'t load. Check your connection.'}</p>`;
     }
+}
+
+// A restart logs the same people again. Back-to-back logs (newest first) with the exact
+// same players, each within 3 hours of the previous one, count as one game.
+const RESTART_GAP = 3 * 3600e3;
+
+function collapseRestarts(games) {
+    const out = [];
+    for (const g of games) {
+        const key = (g.playerNames || []).map(n => String(n).trim().toLowerCase()).sort().join('\n');
+        const t = g.createdAt?.toMillis?.() ?? 0;
+        const prev = out.at(-1);
+        if (prev && prev.key === key && prev.oldest - t < RESTART_GAP) {
+            prev.starts++;
+            prev.oldest = t;
+            continue;
+        }
+        out.push({ ...g, key, starts: 1, oldest: t });
+    }
+    return out;
 }
 
 function renderAdminStats() {
@@ -1359,6 +1379,7 @@ function renderAdminList() {
             <p class="text">${(g.playerNames || []).map(n => escapeHtml(n)).join(', ')}</p>
             <div class="bubble-meta">
                 <span>${icon('users')}${g.playerCount ?? (g.playerNames || []).length}</span>
+                ${g.starts > 1 ? `<span>${g.starts} starts</span>` : ''}
                 <span class="by">${escapeHtml(g.nickname || '?')} · ${when(g.createdAt)}</span>
             </div>
         </article>`).join('') : '<p class="message">No games logged yet.</p>';
