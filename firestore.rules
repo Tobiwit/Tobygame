@@ -1,0 +1,99 @@
+rules_version = '2';
+
+// Paste into Firebase console > Firestore Database > Rules, then Publish.
+// Before publishing: replace ADMIN_UID below with your user ID
+// (Firebase console > Authentication > Users > your account > User UID).
+//
+// Players are signed in anonymously by the app (no login screen).
+// You, the project owner, still see and edit everything in the Firebase console.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && request.auth.uid == 'ADMIN_UID'; }
+
+    function data() { return request.resource.data; }
+    function onlyKeys(keys) { return data().keys().hasOnly(keys); }
+    function text(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+
+    // ---- Rate limiting ----------------------------------------------------
+    // Every create also stamps limits/{uid}.<kind> = request.time in the same batch.
+    // A create is only allowed if this user's previous stamp is old enough.
+    function limitsDoc() { return /databases/$(database)/documents/limits/$(request.auth.uid); }
+    function cooledDown(kind, seconds) {
+      return !exists(limitsDoc())
+        || !(kind in get(limitsDoc()).data)
+        || request.time > get(limitsDoc()).data[kind] + duration.value(seconds, 's');
+    }
+    function stamped(kind) { return getAfter(limitsDoc()).data[kind] == request.time; }
+    function rateLimited(kind, seconds) { return cooledDown(kind, seconds) && stamped(kind); }
+    // A user may only move one of their own stamps per write, and only to "now".
+    function stampsNow() {
+      let changed = data().diff(resource == null ? {} : resource.data).affectedKeys();
+      return changed.size() == 1
+        && (!('question' in changed) || data().question == request.time)
+        && (!('feedback' in changed) || data().feedback == request.time)
+        && (!('game' in changed) || data().game == request.time);
+    }
+
+    // A vote write may add exactly one like or one dislike, nothing else.
+    function oneVote() {
+      let likes = data().get('likes', 0) - resource.data.get('likes', 0);
+      let dislikes = data().get('dislikes', 0) - resource.data.get('dislikes', 0);
+      return likes >= 0 && dislikes >= 0 && likes + dislikes == 1;
+    }
+
+    match /questions/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && onlyKeys(['text', 'category', 'scale', 'likes', 'dislikes', 'createdAt', 'nickname'])
+        && text(data().text, 1, 500)
+        && text(data().category, 1, 40)
+        && text(data().scale, 1, 60)
+        && text(data().nickname, 1, 40)
+        && data().likes == 0
+        && data().dislikes == 0
+        && data().createdAt == request.time
+        && rateLimited('question', 15);
+      allow update: if signedIn()
+        && data().diff(resource.data).affectedKeys().hasOnly(['likes', 'dislikes'])
+        && oneVote();
+      allow delete: if isAdmin();
+    }
+
+    // Write-only for players. Only the admin can read.
+    match /feedback/{id} {
+      allow create: if signedIn()
+        && onlyKeys(['feedback', 'nickname', 'createdAt'])
+        && text(data().feedback, 1, 3000)
+        && text(data().nickname, 1, 40)
+        && data().createdAt == request.time
+        && rateLimited('feedback', 30);
+      allow read, delete: if isAdmin();
+    }
+
+    match /usage/{id} {
+      allow create: if signedIn()
+        && onlyKeys(['nickname', 'playerCount', 'playerNames', 'createdAt', 'editedPlayers'])
+        && text(data().nickname, 1, 40)
+        && data().playerNames is list && data().playerNames.size() <= 50
+        && data().createdAt == request.time
+        && rateLimited('game', 10);
+      allow read: if isAdmin();
+    }
+
+    match /limits/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && onlyKeys(['question', 'feedback', 'game'])
+        && stampsNow();
+    }
+
+    // The admin's push subscriptions. The Vercel function reads them with a service account.
+    match /adminPush/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // Anything else (including notified/, used by the Vercel function) is closed to the app.
+  }
+}

@@ -1,5 +1,11 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, increment } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import {
+    getFirestore, collection, getDocs, doc, updateDoc, increment, writeBatch, serverTimestamp,
+    setDoc, deleteDoc, query, orderBy, limit,
+} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import {
+    getAuth, onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, signOut,
+} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
 const HARDCODED_PASSWORD = "ohlala";
 
@@ -13,15 +19,82 @@ const firebaseConfig = {
     measurementId: "G-SGZFK0GKYT"
 };
 
+// Web Push public key. Public by design; the private half lives only in Vercel's env vars.
+const VAPID_PUBLIC_KEY = 'BMeTGvgN90OweDa-hi8jNRj0YAmxa91RRKTGkZID8j2kyYKXsjpxqsrh58OhYOB61ilP4P8OrS5LgBFGxrVZY94';
+
 let app;
 let db;
+let auth;
 
 try {
     app = initializeApp(firebaseConfig);
     db = getFirestore(app);
+    auth = getAuth(app);
 } catch (error) {
     console.error("Firebase initialization error:", error);
 }
+
+/* =========================================================
+   Sign-in
+   Friends are signed in anonymously and silently: no screen, no password.
+   The admin signs in with email + password on the hidden admin screen.
+   Firestore rules decide what each can do.
+   ========================================================= */
+let currentUser = null;
+let resolveAuthReady;
+const authReady = new Promise(r => { resolveAuthReady = r; });
+// Never block the app on sign-in for more than a few seconds.
+setTimeout(() => resolveAuthReady(null), 6000);
+
+function setupAuth() {
+    if (!auth) { resolveAuthReady(null); return; }
+    onAuthStateChanged(auth, (user) => {
+        currentUser = user;
+        if (user) {
+            resolveAuthReady(user);
+        } else {
+            signInAnonymously(auth).catch((error) => {
+                console.error('Anonymous sign-in failed:', error);
+                resolveAuthReady(null);
+            });
+        }
+        updateAdminUi();
+    });
+}
+
+const isAdminUser = () => !!currentUser && !currentUser.isAnonymous;
+
+/**
+ * Create a document and stamp the caller's rate-limit doc in the same write.
+ * The rules only accept the create if the previous stamp is old enough.
+ */
+async function createLogged(col, data, stamp) {
+    await authReady;
+    const ref = doc(collection(db, col));
+    const batch = writeBatch(db);
+    batch.set(ref, { ...data, createdAt: serverTimestamp() });
+    if (currentUser) {
+        batch.set(doc(db, 'limits', currentUser.uid), { [stamp]: serverTimestamp() }, { merge: true });
+    }
+    await batch.commit();
+    notifyAdmin(stamp, ref.id);
+    return ref;
+}
+
+/** Ask the Vercel function to push this to the admin. Fire and forget. */
+function notifyAdmin(type, id) {
+    if (!currentUser) return;
+    currentUser.getIdToken()
+        .then(token => fetch('/api/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ type, id }),
+            keepalive: true,
+        }))
+        .catch(() => {});
+}
+
+const isRateLimited = (error) => error?.code === 'permission-denied';
 
 /* =========================================================
    Colour themes
@@ -312,6 +385,8 @@ function showScreen(screenId) {
         loadAllQuestions();
     } else if (screenId === 'tutorialScreen') {
         renderTutorialStep(false);
+    } else if (screenId === 'adminScreen') {
+        renderAdminState();
     } else if (screenId === 'startGameScreen') {
         if (gamePlayers.length === 0 && !isEditingPlayers) {
             playerCardsList = [];
@@ -406,21 +481,22 @@ async function addQuestion() {
 
     btn.disabled = true;
     try {
-        await addDoc(collection(db, 'questions'), {
+        await createLogged('questions', {
             text: text,
             category: category,
             scale: scale,
             likes: 0,
             dislikes: 0,
-            createdAt: new Date(),
             nickname: nickname || '???'
-        });
+        }, 'question');
 
         $('questionText').value = '';
         flash(message, 'Saved! It\'s in the deck now.', 'success');
     } catch (error) {
         console.error("Error adding question:", error);
-        flash(message, 'Couldn\'t save that. Check your connection.', 'error', 0);
+        flash(message, isRateLimited(error)
+            ? 'Easy there. One question every 15 seconds.'
+            : 'Couldn\'t save that. Check your connection.', 'error', 0);
     } finally {
         btn.disabled = false;
     }
@@ -461,6 +537,7 @@ async function loadVoteQuestions() {
     setVoteControls(false);
 
     try {
+        await authReady;
         const querySnapshot = await getDocs(collection(db, 'questions'));
         currentVoteQuestions = [];
 
@@ -521,9 +598,9 @@ async function vote(voteType) {
     bubble.classList.remove('enter');
     bubble.classList.add(voteType === 'like' ? 'out-like' : 'out-dislike');
 
-    const write = updateDoc(doc(db, 'questions', question.id), {
+    const write = authReady.then(() => updateDoc(doc(db, 'questions', question.id), {
         [voteType === 'like' ? 'likes' : 'dislikes']: increment(1)
-    }).catch(error => {
+    })).catch(error => {
         console.error("Error voting:", error);
         lsRemove(`voted_${question.id}`);
         flash(message, 'That vote didn\'t go through.', 'error');
@@ -551,12 +628,13 @@ async function loadAllQuestions() {
     $('questionsCount').hidden = true;
 
     try {
+        await authReady;
         const querySnapshot = await getDocs(collection(db, 'questions'));
         allQuestionsByCategory = {};
         let total = 0;
 
         querySnapshot.forEach((d) => {
-            const data = d.data();
+            const data = { id: d.id, ...d.data() };
             (allQuestionsByCategory[data.category] ||= []).push(data);
             total++;
         });
@@ -599,6 +677,7 @@ function renderQuestionsList() {
                 ${items.map(q => `<article class="bubble">
                     <p class="text">${escapeHtml(q.text)} <span class="scale">${escapeHtml(q.scale)}</span></p>
                     ${votesMeta(q, true)}
+                    ${isAdminUser() ? `<button class="admin-delete" data-delete="${escapeHtml(q.id)}" aria-label="Delete question">${icon('x')}Delete</button>` : ''}
                 </article>`).join('')}
             </div>
         </section>`;
@@ -701,15 +780,13 @@ async function startGame() {
     btn.textContent = 'Shuffling…';
 
     try {
-        // --- USAGE TRACKING ---
-        const nickname = lsGet('nickname') || 'Anonymous';
-        await addDoc(collection(db, 'usage'), {
-            nickname: nickname,
+        // Usage log + admin push. Never blocks the game if it fails or is rate limited.
+        createLogged('usage', {
+            nickname: lsGet('nickname') || 'Anonymous',
             playerCount: gamePlayers.length,
             playerNames: gamePlayers,
-            createdAt: new Date(),
             editedPlayers: isEditingPlayers
-        });
+        }, 'game').catch(error => console.warn('Usage not logged:', error.code || error));
 
         if (isEditingPlayers) {
             // Keep the question stack, and stay on the same player if they're still in.
@@ -718,6 +795,7 @@ async function startGame() {
             const stillIn = gamePlayers.indexOf(previousCurrent);
             currentPlayerIndex = stillIn >= 0 ? stillIn : savedPlayerIndex % gamePlayers.length;
         } else {
+            await authReady;
             const querySnapshot = await getDocs(collection(db, 'questions'));
             gameQuestions = [];
 
@@ -871,6 +949,7 @@ async function voteInGame(voteType) {
     $('gameVotedNote').hidden = false;
 
     try {
+        await authReady;
         await updateDoc(doc(db, 'questions', question.id), {
             [voteType === 'like' ? 'likes' : 'dislikes']: increment(1)
         });
@@ -1013,16 +1092,14 @@ async function sendFeedback() {
         return;
     }
     try {
-        await addDoc(collection(db, 'feedback'), {
-            feedback: feedback,
-            nickname: nickname,
-            createdAt: new Date()
-        });
+        await createLogged('feedback', { feedback: feedback, nickname: nickname }, 'feedback');
         input.value = '';
         flash(message, 'Sent. Thank you!', 'success');
     } catch (error) {
         console.error('Error sending feedback:', error);
-        flash(message, 'Couldn\'t send that. Check your connection.', 'error', 0);
+        flash(message, isRateLimited(error)
+            ? 'Got it already. Give it 30 seconds before sending more.'
+            : 'Couldn\'t send that. Check your connection.', 'error', 0);
     }
 }
 
@@ -1175,21 +1252,266 @@ function closeInstallSheet(snoozeDays) {
 }
 
 /* =========================================================
+   Admin (hidden: long-press the menu logo)
+   Everything here is also enforced by firestore.rules; hiding the
+   screen is just tidiness, not security.
+   ========================================================= */
+let adminTab = 'games';
+let adminData = { games: [], feedback: [] };
+
+function updateAdminUi() {
+    $('adminLink').hidden = !isAdminUser();
+    if ($('adminScreen').classList.contains('active')) renderAdminState();
+}
+
+function openAdmin() {
+    if (lsGet('authorized') !== 'true') return;
+    showScreen('adminScreen');
+}
+
+function renderAdminState() {
+    const admin = isAdminUser();
+    $('adminLogin').hidden = admin;
+    $('adminPanel').hidden = !admin;
+    $('adminSub').textContent = admin ? `Signed in as ${currentUser.email}` : 'Only you can get in here.';
+    if (admin) {
+        loadAdmin();
+        refreshPushStatus();
+    }
+}
+
+async function adminSignIn() {
+    const email = $('adminEmail').value.trim();
+    const password = $('adminPassword').value;
+    const error = $('adminError');
+    const btn = $('adminSignInBtn');
+    if (!email || !password) { error.textContent = 'Email and password, please.'; return; }
+    btn.disabled = true;
+    error.textContent = '';
+    try {
+        await signInWithEmailAndPassword(auth, email, password);
+        $('adminPassword').value = '';
+    } catch (e) {
+        console.error('Admin sign-in failed:', e);
+        error.textContent = e.code === 'auth/too-many-requests'
+            ? 'Too many tries. Wait a minute.'
+            : 'That didn\'t work.';
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function adminSignOut() {
+    await signOut(auth); // onAuthStateChanged signs this device back in anonymously
+    showScreen('mainMenu');
+}
+
+const DAY = 24 * 60 * 60 * 1000;
+
+function when(ts) {
+    const t = ts?.toMillis ? ts.toMillis() : 0;
+    if (!t) return '';
+    const diff = Date.now() - t;
+    if (diff < 60e3) return 'just now';
+    if (diff < 3600e3) return `${Math.floor(diff / 60e3)} min ago`;
+    if (diff < DAY) return `${Math.floor(diff / 3600e3)} h ago`;
+    if (diff < 2 * DAY) return 'yesterday';
+    return new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: diff > 300 * DAY ? 'numeric' : undefined });
+}
+
+async function loadAdmin() {
+    const list = $('adminList');
+    list.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
+    try {
+        const [games, feedback] = await Promise.all([
+            getDocs(query(collection(db, 'usage'), orderBy('createdAt', 'desc'), limit(300))),
+            getDocs(query(collection(db, 'feedback'), orderBy('createdAt', 'desc'), limit(100))),
+        ]);
+        adminData.games = games.docs.map(d => d.data()).filter(g => !g.editedPlayers);
+        adminData.feedback = feedback.docs.map(d => d.data());
+        renderAdminStats();
+        renderAdminList();
+    } catch (error) {
+        console.error('Admin load failed:', error);
+        list.innerHTML = `<p class="message error">${error.code === 'permission-denied'
+            ? `This account isn't the admin in firestore.rules. Its user ID is <code>${escapeHtml(currentUser?.uid || '')}</code>.`
+            : 'Couldn\'t load. Check your connection.'}</p>`;
+    }
+}
+
+function renderAdminStats() {
+    const now = Date.now();
+    const since = (ms) => adminData.games.filter(g => now - (g.createdAt?.toMillis?.() ?? 0) < ms).length;
+    const players = new Set(adminData.games.flatMap(g => (g.playerNames || []).map(n => String(n).trim().toLowerCase())));
+    const stats = [
+        [since(7 * DAY), 'games this week'],
+        [since(30 * DAY), 'games this month'],
+        [players.size, 'different players'],
+    ];
+    $('adminStats').innerHTML = stats.map(([n, label]) => `<div><strong>${n}</strong><span>${label}</span></div>`).join('');
+}
+
+function renderAdminList() {
+    $('adminTabs').querySelectorAll('.filter-chip').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.tab === adminTab)));
+    const list = $('adminList');
+    if (adminTab === 'games') {
+        list.innerHTML = adminData.games.length ? adminData.games.map(g => `<article class="bubble admin-item">
+            <p class="text">${(g.playerNames || []).map(n => escapeHtml(n)).join(', ')}</p>
+            <div class="bubble-meta">
+                <span>${icon('users')}${g.playerCount ?? (g.playerNames || []).length}</span>
+                <span class="by">${escapeHtml(g.nickname || '?')} · ${when(g.createdAt)}</span>
+            </div>
+        </article>`).join('') : '<p class="message">No games logged yet.</p>';
+    } else {
+        list.innerHTML = adminData.feedback.length ? adminData.feedback.map(f => `<article class="bubble admin-item">
+            <p class="text">${escapeHtml(f.feedback)}</p>
+            <div class="bubble-meta"><span class="by">${escapeHtml(f.nickname || '?')} · ${when(f.createdAt)}</span></div>
+        </article>`).join('') : '<p class="message">No feedback yet.</p>';
+    }
+}
+
+async function deleteQuestion(id, button) {
+    if (!isAdminUser() || !confirm('Delete this question for everyone?')) return;
+    button.disabled = true;
+    try {
+        await deleteDoc(doc(db, 'questions', id));
+        const card = button.closest('.bubble');
+        card.remove();
+        for (const items of Object.values(allQuestionsByCategory)) {
+            const i = items.findIndex(q => q.id === id);
+            if (i >= 0) items.splice(i, 1);
+        }
+    } catch (error) {
+        console.error('Delete failed:', error);
+        button.disabled = false;
+        alert('Couldn\'t delete that one.');
+    }
+}
+
+/* ---------- Push notifications (admin device only) ---------- */
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+
+function urlB64ToUint8Array(base64) {
+    const padded = (base64 + '='.repeat((4 - base64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+    return Uint8Array.from(atob(padded), c => c.charCodeAt(0));
+}
+
+async function pushDocId(endpoint) {
+    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(endpoint));
+    return Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, '0')).join('').slice(0, 40);
+}
+
+async function currentPushSubscription() {
+    const reg = await navigator.serviceWorker.getRegistration();
+    return reg ? reg.pushManager.getSubscription() : null;
+}
+
+async function refreshPushStatus() {
+    const status = $('pushStatus');
+    const btn = $('pushBtn');
+    if (!pushSupported()) {
+        status.textContent = isIOS && !isStandalone()
+            ? 'Open Tobygame from your Home Screen to turn these on.'
+            : 'This browser can\'t do push notifications.';
+        btn.hidden = true;
+        return;
+    }
+    btn.hidden = false;
+    const sub = await currentPushSubscription().catch(() => null);
+    const on = !!sub && Notification.permission === 'granted';
+    status.textContent = on
+        ? 'On for this device: new games, questions and feedback.'
+        : Notification.permission === 'denied'
+            ? 'Blocked. Allow notifications for Tobygame in your phone\'s settings.'
+            : 'Off for this device.';
+    btn.textContent = on ? 'Turn off' : 'Turn on';
+    btn.dataset.on = String(on);
+}
+
+async function togglePush() {
+    const btn = $('pushBtn');
+    btn.disabled = true;
+    try {
+        if (btn.dataset.on === 'true') {
+            const sub = await currentPushSubscription();
+            if (sub) {
+                await deleteDoc(doc(db, 'adminPush', await pushDocId(sub.endpoint)));
+                await sub.unsubscribe();
+            }
+        } else {
+            if (await Notification.requestPermission() !== 'granted') return;
+            const reg = await navigator.serviceWorker.register('/sw.js');
+            await navigator.serviceWorker.ready;
+            const sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY),
+            });
+            const json = sub.toJSON();
+            await setDoc(doc(db, 'adminPush', await pushDocId(json.endpoint)), {
+                endpoint: json.endpoint,
+                keys: json.keys,
+                device: navigator.userAgent.slice(0, 160),
+                createdAt: serverTimestamp(),
+            });
+        }
+    } catch (error) {
+        console.error('Push toggle failed:', error);
+        $('pushStatus').textContent = 'That didn\'t work. Try again.';
+    } finally {
+        btn.disabled = false;
+        refreshPushStatus();
+    }
+}
+
+function setupAdminGesture() {
+    const logo = document.querySelector('#mainMenu .hero-logo');
+    let timer = 0;
+    const cancel = () => clearTimeout(timer);
+    logo.addEventListener('pointerdown', () => {
+        cancel();
+        timer = setTimeout(() => {
+            navigator.vibrate?.(15);
+            openAdmin();
+        }, 800);
+    });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(type => logo.addEventListener(type, cancel));
+    logo.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Tapping a notification brings the app forward on the admin screen.
+    navigator.serviceWorker?.addEventListener('message', (e) => {
+        if (e.data?.open === 'admin') openAdmin();
+    });
+}
+
+/* =========================================================
    Globals for inline handlers
    ========================================================= */
 Object.assign(window, {
     checkPassword, setNickname, changeNickname, showScreen, addQuestion, vote,
     startGame, nextQuestion, skipQuestion, endGame, voteInGame, toggleChaosModifier,
     getRandomPlayer, addPlayer, removePlayer, loadCurrentPlayersForEdit, cancelSetup,
-    sendFeedback, showInstallHint,
+    sendFeedback, showInstallHint, openAdmin, adminSignIn, adminSignOut, togglePush,
 });
 
 /* =========================================================
    Boot
    ========================================================= */
 function boot() {
+    setupAuth();
     setupDotField();
+    setupAdminGesture();
     renderCategoryChoices();
+
+    $('adminTabs').addEventListener('click', (e) => {
+        const chip = e.target.closest('.filter-chip');
+        if (!chip) return;
+        adminTab = chip.dataset.tab;
+        renderAdminList();
+    });
+    $('questionsList').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-delete]');
+        if (btn) deleteQuestion(btn.dataset.delete, btn);
+    });
 
     $('tutorialBackBtn').addEventListener('click', tutorialBack);
     $('tutorialForwardBtn').addEventListener('click', tutorialForward);
@@ -1213,6 +1535,8 @@ function boot() {
 
     if (lsGet('authorized') === 'true') {
         showScreen(lsGet('nickname') ? 'mainMenu' : 'nicknameScreen');
+        // Opened from a notification (?admin).
+        if (new URLSearchParams(location.search).has('admin') && lsGet('nickname')) openAdmin();
     } else {
         showScreen('passwordScreen');
     }

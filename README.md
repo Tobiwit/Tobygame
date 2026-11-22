@@ -33,6 +33,28 @@ const firebaseConfig = {
 
 6. In Firestore, create a collection named `questions` (it will be created automatically when you add your first question)
 
+## Admin, notifications and security
+
+Players never log in: the app signs every device in anonymously in the background.
+The admin (you) signs in with email + password on a hidden screen: **long-press the logo on the main menu**.
+`firestore.rules` enforces everything, including rate limits (one question per 15 s, one feedback per 30 s,
+one game log per 10 s per device) and admin-only reading of `usage` and `feedback`.
+
+Push notifications (new game, new question, new feedback) go to the admin's devices only, via the
+Vercel function `api/notify.js` and Web Push. No Firebase Cloud Functions or Blaze plan needed.
+
+One-time setup:
+
+1. **Firebase console → Authentication → Sign-in method**: enable **Anonymous** and **Email/Password**.
+2. **Authentication → Users → Add user**: your email + a password. Copy its **User UID**.
+3. In `firestore.rules`, replace `ADMIN_UID` with that UID.
+4. **Project settings → Service accounts → Generate new private key.** Keep the JSON file private.
+5. **Vercel → Project → Settings → Environment Variables**, add:
+   - `FIREBASE_SERVICE_ACCOUNT`: the whole JSON from step 4, on one line
+   - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`: from your local `.env.local` (never committed)
+6. Push to GitHub so Vercel deploys, **then** publish the rules (Firestore → Rules → paste → Publish).
+7. On your phone: open Tobygame **from the Home Screen**, long-press the logo, sign in, tap **Turn on** under Notifications.
+
 ## Usage
 
 1. Enter the password: `pineapple`

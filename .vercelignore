@@ -1,0 +1,6 @@
+# Source files Vercel doesn't need to serve
+.claude/
+.replit
+replit.nix
+replit.md
+firestore.rules

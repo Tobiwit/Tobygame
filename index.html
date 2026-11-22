@@ -99,6 +99,7 @@
                     <button class="link" onclick="showScreen('feedbackScreen')">Feedback</button>
                     <button class="link" onclick="changeNickname()">Change name</button>
                     <button class="link" id="installLink" hidden onclick="showInstallHint()">Add to Home Screen</button>
+                    <button class="link" id="adminLink" hidden onclick="openAdmin()">Admin</button>
                 </nav>
             </div>
         </section>
@@ -187,6 +188,43 @@
                 <p id="feedbackMessage" class="message" role="status"></p>
                 <button class="btn btn--primary" onclick="sendFeedback()">Send</button>
             </footer>
+        </section>
+
+        <!-- ============ Admin (long-press the menu logo) ============ -->
+        <section id="adminScreen" class="screen screen--page" data-theme="ultraviolet">
+            <header class="page-head field-bg">
+                <div class="topbar">
+                    <button class="icon-btn" onclick="showScreen('mainMenu')" aria-label="Back to menu"><svg class="i"><use href="#i-x"/></svg></button>
+                </div>
+                <h1 class="display display--md">Admin</h1>
+                <p class="head-sub" id="adminSub">Only you can get in here.</p>
+            </header>
+            <div class="page-body">
+                <form id="adminLogin" class="stack" onsubmit="event.preventDefault(); adminSignIn();">
+                    <label class="label" for="adminEmail">Email</label>
+                    <input type="email" id="adminEmail" class="field" autocomplete="username" enterkeyhint="next">
+                    <label class="label" for="adminPassword">Password</label>
+                    <input type="password" id="adminPassword" class="field" autocomplete="current-password" enterkeyhint="go">
+                    <button type="submit" class="btn btn--primary" id="adminSignInBtn">Sign in</button>
+                    <p id="adminError" class="error" role="alert"></p>
+                </form>
+                <div id="adminPanel" hidden>
+                    <div class="admin-push">
+                        <div>
+                            <strong>Notifications</strong>
+                            <p id="pushStatus"></p>
+                        </div>
+                        <button class="btn btn--outline btn--auto" id="pushBtn" onclick="togglePush()">Turn on</button>
+                    </div>
+                    <div class="admin-stats" id="adminStats"></div>
+                    <div class="filter-row admin-tabs" id="adminTabs" role="toolbar" aria-label="Show">
+                        <button class="filter-chip" data-tab="games" aria-pressed="true">Games</button>
+                        <button class="filter-chip" data-tab="feedback" aria-pressed="false">Feedback</button>
+                    </div>
+                    <div class="cat-list" id="adminList"></div>
+                    <button class="link admin-signout" onclick="adminSignOut()">Sign out of admin</button>
+                </div>
+            </div>
         </section>
 
         <!-- ============ Tutorial ============ -->
