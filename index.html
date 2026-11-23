@@ -216,6 +216,8 @@
                         </div>
                         <button class="btn btn--outline btn--auto" id="pushBtn" onclick="togglePush()">Turn on</button>
                     </div>
+                    <button class="link admin-test" id="pushTestBtn" hidden onclick="sendTestPush()">Send a test notification</button>
+                    <p class="message" id="pushTestResult" role="status"></p>
                     <div class="admin-stats" id="adminStats"></div>
                     <div class="filter-row admin-tabs" id="adminTabs" role="toolbar" aria-label="Show">
                         <button class="filter-chip" data-tab="games" aria-pressed="true">Games</button>

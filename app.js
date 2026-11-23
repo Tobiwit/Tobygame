@@ -91,6 +91,8 @@ function notifyAdmin(type, id) {
             body: JSON.stringify({ type, id }),
             keepalive: true,
         }))
+        .then(r => r.json())
+        .then(result => console.info('notify', type, result))
         .catch(() => {});
 }
 
@@ -1440,6 +1442,9 @@ async function refreshPushStatus() {
     btn.hidden = false;
     const sub = await currentPushSubscription().catch(() => null);
     const on = !!sub && Notification.permission === 'granted';
+    $('pushTestBtn').hidden = !on;
+    // Re-save this device's subscription in case the server dropped it or it predates the uid field.
+    if (on) savePushSubscription(sub).catch(error => console.error('Could not save subscription:', error));
     status.textContent = on
         ? 'On for this device: new games, questions and feedback.'
         : Notification.permission === 'denied'
@@ -1447,6 +1452,56 @@ async function refreshPushStatus() {
             : 'Off for this device.';
     btn.textContent = on ? 'Turn off' : 'Turn on';
     btn.dataset.on = String(on);
+}
+
+async function savePushSubscription(sub) {
+    const json = sub.toJSON();
+    await setDoc(doc(db, 'adminPush', await pushDocId(json.endpoint)), {
+        endpoint: json.endpoint,
+        keys: json.keys,
+        uid: currentUser.uid,
+        device: navigator.userAgent.slice(0, 160),
+        updatedAt: serverTimestamp(),
+    }, { merge: true });
+}
+
+/** Ask the server for a test push and explain whatever comes back. */
+async function sendTestPush() {
+    const btn = $('pushTestBtn');
+    const out = $('pushTestResult');
+    btn.disabled = true;
+    out.className = 'message';
+    out.textContent = 'Sending…';
+    let text;
+    let ok = false;
+    try {
+        const token = await currentUser.getIdToken();
+        const res = await fetch('/api/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ type: 'test', publicKey: VAPID_PUBLIC_KEY }),
+        });
+        const r = await res.json().catch(() => ({}));
+        console.info('test push', res.status, r);
+        const failed = (r.results || []).find(x => !x.ok);
+        if (res.status >= 500) text = 'The server crashed. Check Vercel → Logs for /api/notify.';
+        else if (r.reason === 'not-configured') text = `Vercel is missing ${r.missing.join(', ')}. Add it, then redeploy.`;
+        else if (r.reason === 'key-mismatch') text = 'VAPID_PUBLIC_KEY in Vercel isn\'t the key the app uses. Copy it again from .env.local, redeploy, then turn notifications off and on.';
+        else if (r.reason === 'not-an-admin-device') text = 'This device isn\'t registered yet. Turn notifications off and on, then test again.';
+        else if (r.sent) {
+            ok = true;
+            text = `Accepted by ${r.results.filter(x => x.ok).map(x => x.host).join(', ')}. Lock your phone or switch apps: iOS may not show a banner while Tobygame is open.`;
+        } else if (failed?.status === 403 || failed?.status === 401) text = `Rejected (${failed.status}): the two VAPID keys in Vercel don't belong together, or VAPID_SUBJECT isn't a valid https:// or mailto: address. ${failed.error}`;
+        else if (failed?.status === 404 || failed?.status === 410) text = 'This device\'s subscription expired. Turn notifications off and on.';
+        else if (failed) text = `Push failed (${failed.status ?? 'no status'}): ${failed.error}`;
+        else text = `Not sent: ${r.reason || r.error || res.status}`;
+    } catch (error) {
+        text = `Couldn't reach /api/notify (${error.message}). This only works on the deployed site.`;
+    } finally {
+        btn.disabled = false;
+    }
+    out.className = `message ${ok ? 'success' : 'error'}`;
+    out.textContent = text;
 }
 
 async function togglePush() {
@@ -1467,13 +1522,7 @@ async function togglePush() {
                 userVisibleOnly: true,
                 applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY),
             });
-            const json = sub.toJSON();
-            await setDoc(doc(db, 'adminPush', await pushDocId(json.endpoint)), {
-                endpoint: json.endpoint,
-                keys: json.keys,
-                device: navigator.userAgent.slice(0, 160),
-                createdAt: serverTimestamp(),
-            });
+            await savePushSubscription(sub);
         }
     } catch (error) {
         console.error('Push toggle failed:', error);
@@ -1511,7 +1560,7 @@ Object.assign(window, {
     checkPassword, setNickname, changeNickname, showScreen, addQuestion, vote,
     startGame, nextQuestion, skipQuestion, endGame, voteInGame, toggleChaosModifier,
     getRandomPlayer, addPlayer, removePlayer, loadCurrentPlayersForEdit, cancelSetup,
-    sendFeedback, showInstallHint, openAdmin, adminSignIn, adminSignOut, togglePush,
+    sendFeedback, showInstallHint, openAdmin, adminSignIn, adminSignOut, togglePush, sendTestPush,
 });
 
 /* =========================================================

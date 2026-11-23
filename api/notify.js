@@ -43,21 +43,59 @@ function compose(type, d) {
     return { title: `Feedback from ${who}`, body: clip(d.feedback, 180) };
 }
 
+// Pasted env values often carry stray spaces, newlines or quotes.
+const env = (name) => (process.env[name] || '').trim().replace(/^["']|["']$/g, '');
+
+/** Push to every admin device. Returns one result per device. */
+async function pushToAdmins(db, payload) {
+    const subs = await db.collection('adminPush').get();
+    webpush.setVapidDetails(env('VAPID_SUBJECT') || 'https://tobygame.vercel.app', env('VAPID_PUBLIC_KEY'), env('VAPID_PRIVATE_KEY'));
+    return Promise.all(subs.docs.map(async (s) => {
+        const { endpoint, keys } = s.data();
+        const host = (() => { try { return new URL(endpoint).host; } catch { return '?'; } })();
+        try {
+            const r = await webpush.sendNotification({ endpoint, keys }, payload, { TTL: 60 * 60 * 24, urgency: 'high' });
+            return { host, ok: true, status: r.statusCode };
+        } catch (e) {
+            // The device unsubscribed or the subscription expired: forget it.
+            if (e.statusCode === 404 || e.statusCode === 410) await s.ref.delete();
+            console.error('push failed', host, e.statusCode, e.body || e.message);
+            return { host, ok: false, status: e.statusCode ?? null, error: String(e.body || e.message).slice(0, 200) };
+        }
+    }));
+}
+
 export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
-    const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, FIREBASE_SERVICE_ACCOUNT } = process.env;
-    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !FIREBASE_SERVICE_ACCOUNT) {
-        return res.status(200).json({ sent: false, reason: 'not-configured' });
+    const missing = ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'FIREBASE_SERVICE_ACCOUNT'].filter(n => !env(n));
+    if (missing.length) {
+        return res.status(200).json({ sent: false, reason: 'not-configured', missing });
     }
 
     try {
         const { auth, db } = admin();
 
         const token = (req.headers.authorization || '').replace(/^Bearer /, '');
+        let caller;
         try {
-            await auth.verifyIdToken(token);
+            caller = await auth.verifyIdToken(token);
         } catch {
             return res.status(401).json({ error: 'Not signed in' });
+        }
+
+        // Admin-only test push with a full report, sent from the admin screen.
+        if (req.body?.type === 'test') {
+            const subs = await db.collection('adminPush').get();
+            if (!subs.docs.some(d => d.data().uid === caller.uid)) {
+                return res.status(403).json({ sent: false, reason: 'not-an-admin-device' });
+            }
+            if (req.body.publicKey !== env('VAPID_PUBLIC_KEY')) {
+                return res.status(200).json({ sent: false, reason: 'key-mismatch' });
+            }
+            const results = await pushToAdmins(db, JSON.stringify({
+                title: 'Test from Tobygame', body: 'Notifications work on this device.', tag: 'test', url: '/?admin',
+            }));
+            return res.status(200).json({ sent: results.some(r => r.ok), results });
         }
 
         const { type, id } = req.body || {};
@@ -80,25 +118,9 @@ export default async function handler(req, res) {
             throw e;
         }
 
-        const subs = await db.collection('adminPush').get();
-        if (subs.empty) return res.status(200).json({ sent: false, reason: 'no-subscribers' });
-
-        webpush.setVapidDetails(VAPID_SUBJECT || 'mailto:admin@tobygame.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-        const payload = JSON.stringify({ ...compose(type, data), tag: type, url: '/?admin' });
-
-        let sent = 0;
-        await Promise.all(subs.docs.map(async (s) => {
-            const { endpoint, keys } = s.data();
-            try {
-                await webpush.sendNotification({ endpoint, keys }, payload, { TTL: 60 * 60 * 24 });
-                sent++;
-            } catch (e) {
-                // The device unsubscribed or the subscription expired: forget it.
-                if (e.statusCode === 404 || e.statusCode === 410) await s.ref.delete();
-                else console.error('push failed', e.statusCode, e.body);
-            }
-        }));
-        return res.status(200).json({ sent: sent > 0, devices: sent });
+        const results = await pushToAdmins(db, JSON.stringify({ ...compose(type, data), tag: type, url: '/?admin' }));
+        if (!results.length) return res.status(200).json({ sent: false, reason: 'no-subscribers' });
+        return res.status(200).json({ sent: results.some(r => r.ok), results });
     } catch (e) {
         console.error(e);
         return res.status(500).json({ error: 'Something went wrong' });
